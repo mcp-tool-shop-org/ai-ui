@@ -1,0 +1,53 @@
+---
+const {
+  kicker = "Ship calmer UI",
+  title = "A modern control surface for your product.",
+  subtitle = "Design-system-first pages. Fast to build, easy to keep consistent.",
+  primaryCta = { label: "Get started", href: "/get-started" },
+  secondaryCta = { label: "View docs", href: "/docs" },
+} = Astro.props;
+---
+
+<section class="section">
+  <div class="container">
+    <div class="badge">{kicker}</div>
+
+    <div style="margin-top: var(--space-4); max-width: 58rem;">
+      <h1 class="h1">{title}</h1>
+      <p class="p" style="margin-top: var(--space-4); font-size: var(--text-lg);">
+        {subtitle}
+      </p>
+
+      <div style="margin-top: var(--space-5); display:flex; gap: var(--space-3); flex-wrap: wrap;">
+        <a class="btn primary" href={primaryCta.href}>{primaryCta.label}</a>
+        <a class="btn" href={secondaryCta.href}>{secondaryCta.label}</a>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: var(--space-7); padding: var(--space-6); background: linear-gradient(180deg,
+      color-mix(in oklab, var(--surface), var(--bg) 20%),
+      color-mix(in oklab, var(--surface-2), var(--bg) 30%)
+    );">
+      <div class="grid cols-2" style="align-items:center;">
+        <div>
+          <div class="kicker">What this buys you</div>
+          <h2 class="h2" style="margin-top: var(--space-3);">Consistency without bureaucracy.</h2>
+          <p class="p" style="margin-top: var(--space-3);">
+            Tokens + reusable sections keep pages coherent while you iterate at full speed.
+          </p>
+        </div>
+        <div class="card" style="padding: var(--space-5); border-radius: var(--radius-lg);">
+          <div class="kicker">Example module</div>
+          <div style="margin-top: var(--space-3); display:flex; gap: var(--space-3);">
+            <div class="badge">Spacing</div>
+            <div class="badge">Type</div>
+            <div class="badge">Color roles</div>
+          </div>
+          <p class="p" style="margin-top: var(--space-4);">
+            One place to tune the look. Everything updates.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

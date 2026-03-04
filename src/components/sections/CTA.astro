@@ -1,0 +1,25 @@
+---
+const {
+  title = "Ready to ship a page that doesn't embarrass you?",
+  subtitle = "Use the same review loop on every screen: eyes → brain → hands.",
+  cta = { label: "Start now", href: "/get-started" },
+} = Astro.props;
+---
+
+<section class="section">
+  <div class="container">
+    <div class="card" style="padding: var(--space-7); text-align: left;">
+      <div class="grid cols-2" style="align-items:center;">
+        <div>
+          <h2 class="h2">{title}</h2>
+          <p class="p" style="margin-top: var(--space-3); font-size: var(--text-lg);">
+            {subtitle}
+          </p>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <a class="btn primary" href={cta.href}>{cta.label}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

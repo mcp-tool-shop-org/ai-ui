@@ -1,0 +1,20 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Hero from "../components/sections/Hero.astro";
+import FeatureGrid from "../components/sections/FeatureGrid.astro";
+import CTA from "../components/sections/CTA.astro";
+---
+
+<BaseLayout title="InControl" description="Astro pages with a design-system core.">
+  <Hero
+    kicker="Astro pages, 2026 style"
+    title="Build pages like a design system, not a one-off art project."
+    subtitle="Tokens + reusable sections + tight review loops. Ship fast. Stay consistent."
+    primaryCta={{ label: "Get started", href: "/get-started" }}
+    secondaryCta={{ label: "Docs", href: "/docs" }}
+  />
+
+  <FeatureGrid />
+
+  <CTA />
+</BaseLayout>

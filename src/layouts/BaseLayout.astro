@@ -1,0 +1,50 @@
+---
+const {
+  title = "Site",
+  description = "A clean Astro shell.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <link rel="stylesheet" href="/src/styles/global.css" />
+  </head>
+  <body>
+    <header class="container" style="padding-block: var(--space-5);">
+      <nav style="display:flex; align-items:center; justify-content:space-between; gap: var(--space-4);">
+        <a href="/" style="display:flex; align-items:center; gap: var(--space-3); font-weight:800;">
+          <span class="badge">⚙️</span>
+          <span>InControl</span>
+        </a>
+        <div style="display:flex; gap: var(--space-3); align-items:center;">
+          <a class="kicker" href="/docs">Docs</a>
+          <a class="kicker" href="/pricing">Pricing</a>
+          <a class="btn primary" href="/get-started">Get started</a>
+        </div>
+      </nav>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="container" style="padding-block: var(--space-7); color: var(--faint);">
+      <div style="display:flex; flex-wrap:wrap; justify-content:space-between; gap: var(--space-4); border-top: 1px solid var(--border); padding-top: var(--space-5);">
+        <div>
+          <div style="font-weight:800; color: var(--text);">InControl</div>
+          <div class="kicker" style="margin-top: var(--space-2);">Control surface for your tools.</div>
+        </div>
+        <div style="display:flex; gap: var(--space-5);">
+          <a class="kicker" href="/privacy">Privacy</a>
+          <a class="kicker" href="/terms">Terms</a>
+          <a class="kicker" href="https://github.com/">GitHub</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

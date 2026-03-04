@@ -1,0 +1,34 @@
+---
+const {
+  title = "Built for real-world pages",
+  subtitle = "Sections that stay readable as content grows.",
+  features = [
+    { title: "Token-driven", body: "Spacing, type, and color roles live in one file." },
+    { title: "Composable sections", body: "Hero, features, FAQs, CTAs—swap like LEGO." },
+    { title: "A11y defaults", body: "Focus rings, contrast-minded roles, sensible layout." },
+  ],
+} = Astro.props;
+---
+
+<section class="section">
+  <div class="container">
+    <div style="max-width: 52rem;">
+      <h2 class="h2">{title}</h2>
+      <p class="p" style="margin-top: var(--space-3); font-size: var(--text-lg);">{subtitle}</p>
+    </div>
+
+    <div class="grid cols-3" style="margin-top: var(--space-6);">
+      {features.map((f) => (
+        <article class="card" style="padding: var(--space-6);">
+          <div class="badge">Feature</div>
+          <h3 style="margin: var(--space-4) 0 0; font-size: var(--text-xl); line-height: var(--leading-tight);">
+            {f.title}
+          </h3>
+          <p class="p" style="margin-top: var(--space-3);">
+            {f.body}
+          </p>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
