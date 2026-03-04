@@ -1,0 +1,21 @@
+{
+  "docs": {
+    "globs": ["README.md", "docs/**/*.md", "HANDBOOK.md", "CHANGELOG.md"],
+    "cliHelp": null
+  },
+  "probe": {
+    "baseUrl": "http://localhost:4321",
+    "routes": ["/", "/docs", "/pricing", "/get-started"],
+    "maxDepth": 3,
+    "timeout": 30000,
+    "skipLabels": ["Delete", "Remove", "Destroy", "Reset", "Unsubscribe"],
+    "safeOverride": "data-aiui-safe"
+  },
+  "mapping": {},
+  "output": {
+    "atlas": "ai-ui-output/atlas.json",
+    "probe": "ai-ui-output/probe.jsonl",
+    "diff": "ai-ui-output/diff.json",
+    "diffReport": "ai-ui-output/diff.md"
+  }
+}
