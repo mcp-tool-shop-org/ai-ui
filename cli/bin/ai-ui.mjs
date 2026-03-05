@@ -13,11 +13,14 @@ Usage:
 Commands:
   atlas     Parse docs into a feature catalog (atlas.json)
   probe     Crawl the UI and record triggers (probe.jsonl)
+  surfaces  Extract interactive surfaces from a WebSketch capture
   diff      Match atlas features against probe triggers (diff.json + diff.md)
   stage0    Run atlas → probe → diff in sequence
 
 Options:
   --config <path>   Path to ai-ui.config.json (default: ./ai-ui.config.json)
+  --from <path>     Source capture file (for surfaces command)
+  --out <path>      Override output path
   --verbose         Print extra output
   --help            Show this help
   --version         Show version
@@ -56,6 +59,11 @@ async function main() {
       await runProbe(config, flags);
       break;
     }
+    case 'surfaces': {
+      const { runSurfaces } = await import('../src/surfaces.mjs');
+      await runSurfaces(config, flags);
+      break;
+    }
     case 'diff': {
       const { runDiff } = await import('../src/diff.mjs');
       await runDiff(config, flags);
@@ -74,14 +82,18 @@ async function main() {
 /**
  * Parse CLI flags from args.
  * @param {string[]} args
- * @returns {{ config?: string, verbose: boolean, help: boolean, version: boolean }}
+ * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean }}
  */
 function parseFlags(args) {
-  const flags = { config: undefined, verbose: false, help: false, version: false };
+  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--config' && args[i + 1]) {
       flags.config = args[++i];
+    } else if (a === '--from' && args[i + 1]) {
+      flags.from = args[++i];
+    } else if (a === '--out' && args[i + 1]) {
+      flags.out = args[++i];
     } else if (a === '--verbose') {
       flags.verbose = true;
     } else if (a === '--help' || a === '-h') {

@@ -22,6 +22,7 @@ const DEFAULTS = {
     probe: 'ai-ui-output/probe.jsonl',
     diff: 'ai-ui-output/diff.json',
     diffReport: 'ai-ui-output/diff.md',
+    surfaces: 'ai-ui-output/probe.surfaces.json',
   },
 };
 

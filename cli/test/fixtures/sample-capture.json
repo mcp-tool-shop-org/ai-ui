@@ -1,0 +1,223 @@
+{
+  "version": "0.1",
+  "url": "https://example.com/app",
+  "timestamp_ms": 1700000000000,
+  "viewport": { "w_px": 1920, "h_px": 1080, "aspect": 1.7778 },
+  "compiler": { "name": "websketch-ir", "version": "2.0.0", "options_hash": "fixture" },
+  "root": {
+    "id": "page-0",
+    "role": "PAGE",
+    "bbox": [0, 0, 1, 1],
+    "interactive": false,
+    "visible": true,
+    "children": [
+      {
+        "id": "nav-1",
+        "role": "NAV",
+        "bbox": [0, 0, 1, 0.06],
+        "interactive": false,
+        "visible": true,
+        "children": [
+          {
+            "id": "btn-get-started",
+            "role": "BUTTON",
+            "semantic": "get-started",
+            "bbox": [0.8, 0.01, 0.15, 0.04],
+            "interactive": true,
+            "visible": true,
+            "handlers": [
+              { "event": "click", "intent": "navigate" }
+            ],
+            "style": {
+              "tokens": ["primary"],
+              "size": "md"
+            }
+          },
+          {
+            "id": "link-docs",
+            "role": "LINK",
+            "semantic": "docs",
+            "bbox": [0.3, 0.01, 0.08, 0.04],
+            "interactive": true,
+            "visible": true,
+            "handlers": [
+              { "event": "click", "intent": "navigate" }
+            ]
+          },
+          {
+            "id": "link-pricing",
+            "role": "LINK",
+            "semantic": "pricing",
+            "bbox": [0.4, 0.01, 0.08, 0.04],
+            "interactive": true,
+            "visible": true,
+            "handlers": [
+              { "event": "click", "intent": "navigate" }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "section-hero",
+        "role": "SECTION",
+        "bbox": [0, 0.06, 1, 0.4],
+        "interactive": false,
+        "visible": true,
+        "pattern": {
+          "kind": "custom",
+          "name": "hero"
+        },
+        "children": [
+          {
+            "id": "heading-hero",
+            "role": "TEXT",
+            "bbox": [0.1, 0.1, 0.8, 0.08],
+            "interactive": false,
+            "visible": true,
+            "text": { "kind": "short", "len": 24 }
+          },
+          {
+            "id": "btn-cta",
+            "role": "BUTTON",
+            "semantic": "start-now",
+            "bbox": [0.35, 0.3, 0.3, 0.06],
+            "interactive": true,
+            "visible": true,
+            "handlers": [
+              { "event": "click", "intent": "navigate" }
+            ],
+            "style": {
+              "tokens": ["primary", "elevated"],
+              "size": "lg"
+            }
+          }
+        ]
+      },
+      {
+        "id": "section-search",
+        "role": "SECTION",
+        "bbox": [0, 0.46, 1, 0.08],
+        "interactive": false,
+        "visible": true,
+        "children": [
+          {
+            "id": "search-bar",
+            "role": "INPUT",
+            "semantic": "search",
+            "bbox": [0.2, 0.47, 0.6, 0.05],
+            "interactive": true,
+            "visible": true,
+            "pattern": {
+              "kind": "search_bar",
+              "name": "global-search"
+            },
+            "handlers": [
+              { "event": "input", "intent": "filter" },
+              { "event": "submit", "intent": "search" }
+            ],
+            "state": [
+              { "key": "search.query", "access": "readwrite", "scope": "global" },
+              { "key": "search.results", "access": "read", "scope": "global" }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "section-auth",
+        "role": "SECTION",
+        "bbox": [0, 0.55, 1, 0.35],
+        "interactive": false,
+        "visible": true,
+        "children": [
+          {
+            "id": "form-login",
+            "role": "FORM",
+            "semantic": "login",
+            "bbox": [0.25, 0.56, 0.5, 0.3],
+            "interactive": true,
+            "visible": true,
+            "pattern": {
+              "kind": "auth_form",
+              "name": "login",
+              "variant": "login"
+            },
+            "children": [
+              {
+                "id": "input-email",
+                "role": "INPUT",
+                "semantic": "email",
+                "bbox": [0.3, 0.6, 0.4, 0.04],
+                "interactive": true,
+                "visible": true,
+                "state": [
+                  { "key": "form.email", "access": "readwrite", "scope": "local" }
+                ],
+                "handlers": [
+                  { "event": "input", "intent": "validate" }
+                ]
+              },
+              {
+                "id": "input-password",
+                "role": "INPUT",
+                "semantic": "password",
+                "bbox": [0.3, 0.66, 0.4, 0.04],
+                "interactive": true,
+                "visible": true,
+                "state": [
+                  { "key": "form.password", "access": "write", "scope": "local" }
+                ]
+              },
+              {
+                "id": "btn-submit",
+                "role": "BUTTON",
+                "semantic": "submit",
+                "bbox": [0.35, 0.75, 0.3, 0.05],
+                "interactive": true,
+                "visible": true,
+                "handlers": [
+                  { "event": "click", "intent": "submit_form" }
+                ],
+                "style": {
+                  "tokens": ["primary"],
+                  "size": "md"
+                }
+              },
+              {
+                "id": "btn-delete-account",
+                "role": "BUTTON",
+                "semantic": "delete-account",
+                "bbox": [0.35, 0.82, 0.3, 0.04],
+                "interactive": true,
+                "visible": true,
+                "handlers": [
+                  { "event": "click", "intent": "delete" }
+                ],
+                "style": {
+                  "tokens": ["destructive"],
+                  "size": "sm"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "footer-0",
+        "role": "FOOTER",
+        "bbox": [0, 0.92, 1, 0.08],
+        "interactive": false,
+        "visible": true,
+        "children": [
+          {
+            "id": "text-copyright",
+            "role": "TEXT",
+            "bbox": [0.1, 0.94, 0.3, 0.03],
+            "interactive": false,
+            "visible": true,
+            "text": { "kind": "short", "len": 20 }
+          }
+        ]
+      }
+    ]
+  }
+}

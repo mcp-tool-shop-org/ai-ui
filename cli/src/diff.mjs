@@ -5,7 +5,7 @@ import { matchScore } from './normalize.mjs';
 import { fail } from './config.mjs';
 
 /**
- * Run the Diff command: atlas.json ↔ probe.jsonl → diff.json + diff.md.
+ * Run the Diff command: atlas.json ↔ probe.jsonl (+ surfaces) → diff.json + diff.md.
  * @param {import('./types.mjs').AiUiConfig} config
  * @param {{ verbose?: boolean }} flags
  */
@@ -32,11 +32,28 @@ export async function runDiff(config, flags) {
   const triggers = probeLines.filter(l => l.type === 'trigger');
   const features = atlas.features || [];
 
+  // Load surfaces (optional, enhances matching with pattern/intent signals)
+  const surfacesPath = resolve(cwd, config.output.surfaces);
+  /** @type {import('./types.mjs').Surface[]} */
+  let surfaces = [];
+  if (existsSync(surfacesPath)) {
+    try {
+      const inv = JSON.parse(readFileSync(surfacesPath, 'utf-8'));
+      surfaces = inv.surfaces || [];
+      if (flags.verbose) {
+        console.log(`Diff: loaded ${surfaces.length} surfaces from ${relative(cwd, surfacesPath)}`);
+      }
+    } catch {
+      // Surfaces file is optional — skip on parse error
+    }
+  }
+
   // Load manual mappings
   const manualMapping = config.mapping || {};
 
   if (flags.verbose) {
-    console.log(`Diff: ${features.length} features × ${triggers.length} triggers`);
+    console.log(`Diff: ${features.length} features × ${triggers.length} triggers` +
+      (surfaces.length > 0 ? ` + ${surfaces.length} surfaces` : ''));
   }
 
   // --- Matching ---
@@ -65,18 +82,16 @@ export async function runDiff(config, flags) {
     }
   }
 
-  // Automatic matching
-  const triggerLabels = triggers.map(t => t.label);
-
+  // Automatic matching: probe triggers first, then surfaces
   for (const feature of features) {
     if (matchedFeatureIds.has(feature.id)) continue;
 
-    // Try matching against trigger labels
     const namesToTry = [feature.name, ...feature.synonyms];
     let bestTrigger = null;
     let bestScore = 0;
     let bestMatchType = 'exact';
 
+    // Match against probe trigger labels
     for (const name of namesToTry) {
       for (const trigger of triggers) {
         if (matchedTriggerKeys.has(triggerKey(trigger))) continue;
@@ -101,6 +116,60 @@ export async function runDiff(config, flags) {
       });
       matchedFeatureIds.add(feature.id);
       matchedTriggerKeys.add(triggerKey(bestTrigger));
+      continue;
+    }
+
+    // If no trigger match, try matching against surface labels/patterns
+    if (surfaces.length > 0) {
+      let bestSurface = null;
+      let bestSurfScore = 0;
+      let bestSurfMatchType = 'surface';
+
+      for (const name of namesToTry) {
+        for (const surface of surfaces) {
+          // Match against surface label (semantic hint)
+          if (surface.label) {
+            const score = matchScore(name, surface.label);
+            if (score > bestSurfScore) {
+              bestSurfScore = score;
+              bestSurface = surface;
+              bestSurfMatchType = score === 1.0 ? 'surface-exact' : 'surface-fuzzy';
+            }
+          }
+          // Match against pattern name (e.g., "search_bar" → "search")
+          if (surface.pattern) {
+            const patternName = surface.pattern.replace(/_/g, ' ');
+            const score = matchScore(name, patternName);
+            if (score > bestSurfScore) {
+              bestSurfScore = score;
+              bestSurface = surface;
+              bestSurfMatchType = 'surface-pattern';
+            }
+          }
+          // Match against handler intents (e.g., "submit_form" → "submit")
+          for (const h of surface.handlers) {
+            const intentName = h.intent.replace(/_/g, ' ');
+            const score = matchScore(name, intentName);
+            if (score > bestSurfScore) {
+              bestSurfScore = score;
+              bestSurface = surface;
+              bestSurfMatchType = 'surface-intent';
+            }
+          }
+        }
+      }
+
+      if (bestSurface && bestSurfScore >= 0.4) {
+        matched.push({
+          feature_id: feature.id,
+          feature_name: feature.name,
+          trigger_label: bestSurface.label || bestSurface.pattern || bestSurface.nodeId,
+          trigger_route: bestSurface.route,
+          match_type: bestSurfMatchType,
+          confidence: Math.round(bestSurfScore * 100) / 100,
+        });
+        matchedFeatureIds.add(feature.id);
+      }
     }
   }
 
@@ -164,6 +233,7 @@ export async function runDiff(config, flags) {
   const stats = {
     total_features: features.length,
     total_triggers: triggers.length,
+    total_surfaces: surfaces.length,
     matched: matched.length,
     documented_not_discoverable: documentedNotDiscoverable.length,
     discoverable_not_documented: discoverableNotDocumented.length,
