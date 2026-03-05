@@ -1,0 +1,112 @@
+{
+  "features": [
+    {
+      "id": "search",
+      "name": "Search",
+      "synonyms": ["find", "lookup"],
+      "sources": [{ "file": "README.md", "line": 10, "type": "bullet", "section": "Features" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "delete-account",
+      "name": "Delete account",
+      "synonyms": ["remove account"],
+      "sources": [{ "file": "README.md", "line": 15, "type": "bullet", "section": "Features" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "color-roles",
+      "name": "Color roles",
+      "synonyms": [],
+      "sources": [{ "file": "README.md", "line": 60, "type": "bullet", "section": "Design Tokens" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "navigation",
+      "name": "Navigation",
+      "synonyms": ["nav", "menu"],
+      "sources": [{ "file": "README.md", "line": 20, "type": "bullet", "section": "Features" }],
+      "expected_entrypoints": []
+    }
+  ],
+  "triggers": [
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "a",
+      "label": "Search",
+      "href": "/search",
+      "selector": "a.search",
+      "depth": 0,
+      "parent_nav": true,
+      "timestamp": "2026-01-01T00:00:00Z"
+    },
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "a",
+      "label": "Docs",
+      "href": "/docs",
+      "selector": "a.docs",
+      "depth": 0,
+      "parent_nav": true,
+      "timestamp": "2026-01-01T00:00:00Z"
+    },
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "button",
+      "label": "Get started",
+      "href": null,
+      "selector": "button.cta",
+      "depth": 0,
+      "parent_nav": false,
+      "timestamp": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "surfaces": [
+    {
+      "nodeId": "search-bar-1",
+      "route": "/",
+      "role": "INPUT",
+      "label": "search",
+      "pattern": "search_bar",
+      "styleTokens": [],
+      "handlers": [
+        { "event": "input", "intent": "filter" },
+        { "event": "submit", "intent": "search" }
+      ],
+      "state": [{ "key": "search.query", "access": "readwrite" }]
+    },
+    {
+      "nodeId": "btn-delete",
+      "route": "/settings",
+      "role": "BUTTON",
+      "label": "delete-account",
+      "pattern": null,
+      "styleTokens": ["destructive"],
+      "handlers": [{ "event": "click", "intent": "delete" }],
+      "state": []
+    },
+    {
+      "nodeId": "nav-main",
+      "route": "/",
+      "role": "NAV",
+      "label": null,
+      "pattern": "nav_menu",
+      "styleTokens": [],
+      "handlers": [],
+      "state": []
+    },
+    {
+      "nodeId": "btn-cta",
+      "route": "/",
+      "role": "BUTTON",
+      "label": "get-started",
+      "pattern": null,
+      "styleTokens": ["primary"],
+      "handlers": [{ "event": "click", "intent": "navigate" }],
+      "state": []
+    }
+  ]
+}

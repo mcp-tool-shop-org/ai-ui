@@ -1,8 +1,15 @@
 // @ts-check
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
-import { matchScore } from './normalize.mjs';
 import { fail } from './config.mjs';
+import {
+  scoreCandidate,
+  classifyFailure,
+  formatFailureReason,
+  generateSuggestions,
+  detectAmbiguous,
+  enrichDiscoverable,
+} from './diagnostics.mjs';
 
 /**
  * Run the Diff command: atlas.json ↔ probe.jsonl (+ surfaces) → diff.json + diff.md.
@@ -56,15 +63,19 @@ export async function runDiff(config, flags) {
       (surfaces.length > 0 ? ` + ${surfaces.length} surfaces` : ''));
   }
 
-  // --- Matching ---
+  // --- Matching with full candidate collection ---
   /** @type {{ feature_id: string, feature_name: string, trigger_label: string, trigger_route: string, match_type: string, confidence: number }[]} */
   const matched = [];
   /** @type {Set<string>} */
   const matchedFeatureIds = new Set();
   /** @type {Set<string>} */
   const matchedTriggerKeys = new Set();
+  /** @type {Map<string, import('./types.mjs').CandidateAttempt[]>} */
+  const candidateMap = new Map();
+  /** @type {import('./types.mjs').AmbiguousMatch[]} */
+  const ambiguousMatches = [];
 
-  // Manual mappings first
+  // Manual mappings first (no change)
   for (const [featureId, triggerLabel] of Object.entries(manualMapping)) {
     const feature = features.find(f => f.id === featureId);
     const trigger = triggers.find(t => t.label === triggerLabel);
@@ -82,118 +93,107 @@ export async function runDiff(config, flags) {
     }
   }
 
-  // Automatic matching: probe triggers first, then surfaces
+  // Automatic matching: collect ALL candidates per feature
   for (const feature of features) {
     if (matchedFeatureIds.has(feature.id)) continue;
 
     const namesToTry = [feature.name, ...feature.synonyms];
-    let bestTrigger = null;
-    let bestScore = 0;
-    let bestMatchType = 'exact';
+    /** @type {import('./types.mjs').CandidateAttempt[]} */
+    const allCandidates = [];
 
-    // Match against probe trigger labels
-    for (const name of namesToTry) {
-      for (const trigger of triggers) {
-        if (matchedTriggerKeys.has(triggerKey(trigger))) continue;
-
-        const score = matchScore(name, trigger.label);
-        if (score > bestScore) {
-          bestScore = score;
-          bestTrigger = trigger;
-          bestMatchType = score === 1.0 ? 'exact' : score >= 0.8 ? 'substring' : 'fuzzy';
-        }
-      }
+    // Score against probe triggers
+    for (const trigger of triggers) {
+      if (matchedTriggerKeys.has(triggerKey(trigger))) continue;
+      allCandidates.push(scoreCandidate(namesToTry, {
+        source_type: 'trigger',
+        source_id: triggerKey(trigger),
+        source_label: trigger.label,
+        source_route: trigger.route,
+        pattern: null,
+        handlers: [],
+        styleTokens: [],
+      }));
     }
 
-    if (bestTrigger && bestScore >= 0.4) {
+    // Score against surfaces
+    for (const surface of surfaces) {
+      allCandidates.push(scoreCandidate(namesToTry, {
+        source_type: 'surface',
+        source_id: surface.nodeId,
+        source_label: surface.label || surface.pattern || surface.nodeId,
+        source_route: surface.route,
+        pattern: surface.pattern,
+        handlers: surface.handlers,
+        styleTokens: surface.styleTokens,
+      }));
+    }
+
+    // Deterministic sort: composite desc, then source_id asc for ties
+    allCandidates.sort((a, b) =>
+      b.composite_score - a.composite_score ||
+      a.source_id.localeCompare(b.source_id)
+    );
+
+    candidateMap.set(feature.id, allCandidates);
+
+    const best = allCandidates[0];
+    if (best && best.composite_score >= 0.4) {
+      const matchType = best.source_type === 'surface'
+        ? (best.match_dimension === 'pattern' ? 'surface-pattern' :
+           best.match_dimension === 'intent' ? 'surface-intent' :
+           best.label_score === 1.0 ? 'surface-exact' : 'surface-fuzzy')
+        : (best.label_score === 1.0 ? 'exact' : best.label_score >= 0.8 ? 'substring' : 'fuzzy');
+
       matched.push({
         feature_id: feature.id,
         feature_name: feature.name,
-        trigger_label: bestTrigger.label,
-        trigger_route: bestTrigger.route,
-        match_type: bestMatchType,
-        confidence: Math.round(bestScore * 100) / 100,
+        trigger_label: best.source_label,
+        trigger_route: best.source_route,
+        match_type: matchType,
+        confidence: best.composite_score,
       });
       matchedFeatureIds.add(feature.id);
-      matchedTriggerKeys.add(triggerKey(bestTrigger));
-      continue;
-    }
-
-    // If no trigger match, try matching against surface labels/patterns
-    if (surfaces.length > 0) {
-      let bestSurface = null;
-      let bestSurfScore = 0;
-      let bestSurfMatchType = 'surface';
-
-      for (const name of namesToTry) {
-        for (const surface of surfaces) {
-          // Match against surface label (semantic hint)
-          if (surface.label) {
-            const score = matchScore(name, surface.label);
-            if (score > bestSurfScore) {
-              bestSurfScore = score;
-              bestSurface = surface;
-              bestSurfMatchType = score === 1.0 ? 'surface-exact' : 'surface-fuzzy';
-            }
-          }
-          // Match against pattern name (e.g., "search_bar" → "search")
-          if (surface.pattern) {
-            const patternName = surface.pattern.replace(/_/g, ' ');
-            const score = matchScore(name, patternName);
-            if (score > bestSurfScore) {
-              bestSurfScore = score;
-              bestSurface = surface;
-              bestSurfMatchType = 'surface-pattern';
-            }
-          }
-          // Match against handler intents (e.g., "submit_form" → "submit")
-          for (const h of surface.handlers) {
-            const intentName = h.intent.replace(/_/g, ' ');
-            const score = matchScore(name, intentName);
-            if (score > bestSurfScore) {
-              bestSurfScore = score;
-              bestSurface = surface;
-              bestSurfMatchType = 'surface-intent';
-            }
-          }
-        }
+      if (best.source_type === 'trigger') {
+        matchedTriggerKeys.add(best.source_id);
       }
 
-      if (bestSurface && bestSurfScore >= 0.4) {
-        matched.push({
-          feature_id: feature.id,
-          feature_name: feature.name,
-          trigger_label: bestSurface.label || bestSurface.pattern || bestSurface.nodeId,
-          trigger_route: bestSurface.route,
-          match_type: bestSurfMatchType,
-          confidence: Math.round(bestSurfScore * 100) / 100,
-        });
-        matchedFeatureIds.add(feature.id);
-      }
+      // Check ambiguity
+      const ambig = detectAmbiguous(feature, allCandidates);
+      if (ambig) ambiguousMatches.push(ambig);
     }
   }
 
-  // --- Classify unmatched ---
+  // --- Enriched unmatched (with evidence) ---
   const documentedNotDiscoverable = features
     .filter(f => !matchedFeatureIds.has(f.id))
-    .map(f => ({
-      feature_id: f.id,
-      feature_name: f.name,
-      sources: f.sources.map(s => `${s.file}:${s.line}`),
-      reason: 'No matching trigger found in any crawled route',
-    }))
+    .map(f => {
+      const candidates = candidateMap.get(f.id) || [];
+      const top3 = candidates.slice(0, 3);
+      const failureReason = classifyFailure(f, top3, surfaces);
+      return {
+        feature_id: f.id,
+        feature_name: f.name,
+        sources: f.sources.map(s => `${s.file}:${s.line}`),
+        failure_reason: failureReason,
+        top_candidates: top3,
+        suggestions: generateSuggestions(f, surfaces, triggers),
+        reason: formatFailureReason(failureReason),
+      };
+    })
     .sort((a, b) => a.feature_id.localeCompare(b.feature_id));
 
+  // --- Enriched discoverable-not-documented ---
   const discoverableNotDocumented = triggers
     .filter(t => !matchedTriggerKeys.has(triggerKey(t)))
     .reduce((acc, t) => {
-      // Deduplicate by label
       const key = t.label;
       if (!acc.some(x => x.trigger_label === key)) {
+        const enrichment = enrichDiscoverable(t, surfaces);
         acc.push({
           trigger_label: t.label,
           trigger_route: t.route,
           trigger_selector: t.selector,
+          ...enrichment,
           reason: 'No matching feature in atlas',
         });
       }
@@ -201,14 +201,13 @@ export async function runDiff(config, flags) {
     }, /** @type {any[]} */ ([]))
     .sort((a, b) => a.trigger_label.localeCompare(b.trigger_label));
 
-  // --- Burial index ---
+  // --- Burial index (unchanged) ---
   const burialIndex = triggers
     .map(t => {
       const depth = t.depth || 0;
       const inPrimaryNav = t.parent_nav || false;
       const behindOverflow = /more|\.{3}|…|overflow/i.test(t.label);
       const burialScore = depth * 2 + (inPrimaryNav ? 0 : 3) + (behindOverflow ? 5 : 0);
-
       return {
         trigger_label: t.label,
         route: t.route,
@@ -219,7 +218,6 @@ export async function runDiff(config, flags) {
       };
     })
     .reduce((acc, t) => {
-      // Deduplicate by label
       if (!acc.some(x => x.trigger_label === t.trigger_label)) acc.push(t);
       return acc;
     }, /** @type {any[]} */ ([]))
@@ -230,6 +228,18 @@ export async function runDiff(config, flags) {
     ? Math.round((matched.length / features.length) * 1000) / 10
     : 0;
 
+  // Aggregate failure reasons + suggestion rules
+  /** @type {Record<string, number>} */
+  const topFailureReasons = {};
+  /** @type {Record<string, number>} */
+  const topSuggestedRules = {};
+  for (const item of documentedNotDiscoverable) {
+    topFailureReasons[item.failure_reason] = (topFailureReasons[item.failure_reason] || 0) + 1;
+    for (const s of item.suggestions) {
+      topSuggestedRules[s.rule] = (topSuggestedRules[s.rule] || 0) + 1;
+    }
+  }
+
   const stats = {
     total_features: features.length,
     total_triggers: triggers.length,
@@ -237,15 +247,19 @@ export async function runDiff(config, flags) {
     matched: matched.length,
     documented_not_discoverable: documentedNotDiscoverable.length,
     discoverable_not_documented: discoverableNotDocumented.length,
+    ambiguous_matches: ambiguousMatches.length,
     coverage_percent: coveragePct,
+    top_failure_reasons: topFailureReasons,
+    top_suggested_rules: topSuggestedRules,
   };
 
   // --- Write diff.json ---
   const diffJson = {
-    version: '1.0.0',
+    version: '1.1.0',
     generated_at: new Date().toISOString(),
     documented_not_discoverable: documentedNotDiscoverable,
     discoverable_not_documented: discoverableNotDocumented,
+    ambiguous_matches: ambiguousMatches,
     matched: matched.sort((a, b) => a.feature_id.localeCompare(b.feature_id)),
     burial_index: burialIndex,
     stats,
@@ -262,64 +276,140 @@ export async function runDiff(config, flags) {
   console.log(`Diff: coverage ${coveragePct}% (${matched.length}/${features.length}) → ${relative(cwd, diffPath)}`);
 }
 
+// =============================================================================
+// Enhanced markdown report generator
+// =============================================================================
+
 /**
- * Generate a markdown report from the diff data.
+ * Generate an evidence-rich markdown report.
  * @param {object} diff
  * @returns {string}
  */
 function generateReport(diff) {
   const lines = [];
 
-  lines.push('# AI-UI Stage 0 Diff Report');
+  // --- Summary ---
+  lines.push('# AI-UI Diff Report');
   lines.push('');
   lines.push(`Generated: ${diff.generated_at}`);
   lines.push('');
-  lines.push(`## Coverage: ${diff.stats.coverage_percent}% (${diff.stats.matched}/${diff.stats.total_features} features discoverable)`);
+  lines.push('## Summary');
+  lines.push('');
+  lines.push('| Metric | Value |');
+  lines.push('|--------|-------|');
+  lines.push(`| Features documented | ${diff.stats.total_features} |`);
+  lines.push(`| Triggers discovered | ${diff.stats.total_triggers} |`);
+  lines.push(`| Surfaces extracted | ${diff.stats.total_surfaces} |`);
+  lines.push(`| **Coverage** | **${diff.stats.coverage_percent}% (${diff.stats.matched}/${diff.stats.total_features})** |`);
+  lines.push(`| Ambiguous matches | ${diff.stats.ambiguous_matches} |`);
   lines.push('');
 
-  // Documented but NOT Discoverable
-  lines.push('## Documented but NOT Discoverable');
+  // Top failure reasons
+  const failureEntries = Object.entries(diff.stats.top_failure_reasons || {});
+  if (failureEntries.length > 0) {
+    lines.push(`**Top failure reasons:** ${failureEntries.map(([k, v]) => `${k} (${v})`).join(', ')}`);
+  }
+
+  // Top suggestion rules
+  const suggEntries = Object.entries(diff.stats.top_suggested_rules || {});
+  if (suggEntries.length > 0) {
+    lines.push(`**Top fix suggestions:** ${suggEntries.map(([k, v]) => `${k} (${v})`).join(', ')}`);
+  }
   lines.push('');
+  lines.push('---');
+  lines.push('');
+
+  // --- Documented but NOT Discoverable ---
+  lines.push(`## Documented but NOT Discoverable (${diff.documented_not_discoverable.length})`);
+  lines.push('');
+
   if (diff.documented_not_discoverable.length === 0) {
     lines.push('None — all documented features have UI triggers.');
   } else {
-    lines.push('| Feature | Source | Reason |');
-    lines.push('|---------|--------|--------|');
     for (const item of diff.documented_not_discoverable) {
-      lines.push(`| ${item.feature_name} | ${item.sources.join(', ')} | ${item.reason} |`);
+      lines.push(`### ${item.feature_name}`);
+      lines.push('');
+      lines.push(`- **Source:** ${item.sources.join(', ')}`);
+      lines.push(`- **Failure reason:** \`${item.failure_reason}\``);
+
+      // Candidate evidence table
+      if (item.top_candidates && item.top_candidates.length > 0) {
+        lines.push('- **Top candidates tried:**');
+        lines.push('');
+        lines.push('  | # | Candidate | Source | Label | Pattern | Intent | Style | Composite |');
+        lines.push('  |---|-----------|--------|-------|---------|--------|-------|-----------|');
+        for (let i = 0; i < item.top_candidates.length; i++) {
+          const c = item.top_candidates[i];
+          lines.push(`  | ${i + 1} | ${c.source_label} | ${c.source_type} ${c.source_route} | ${c.label_score.toFixed(2)} | ${c.pattern_score.toFixed(2)} | ${c.intent_score.toFixed(2)} | ${c.style_score.toFixed(2)} | ${c.composite_score.toFixed(2)} |`);
+        }
+        lines.push('');
+      } else {
+        lines.push('- **Top candidates tried:** none');
+        lines.push('');
+      }
+
+      // Fix suggestions
+      if (item.suggestions && item.suggestions.length > 0) {
+        lines.push('- **Fix suggestions:**');
+        for (const s of item.suggestions) {
+          lines.push(`  - ${s.action} _(rule: ${s.rule})_`);
+        }
+        lines.push(`  - Tag: \`${item.suggestions[0].tag_hint}\``);
+      }
+      lines.push('');
     }
   }
+
+  lines.push('---');
   lines.push('');
 
-  // Discoverable but NOT Documented
-  lines.push('## Discoverable but NOT Documented');
+  // --- Discoverable but NOT Documented ---
+  lines.push(`## Discoverable but NOT Documented (${diff.discoverable_not_documented.length})`);
   lines.push('');
+
   if (diff.discoverable_not_documented.length === 0) {
     lines.push('None — all UI triggers are documented.');
   } else {
-    lines.push('| Trigger | Route | Selector |');
-    lines.push('|---------|-------|----------|');
+    lines.push('| Trigger | Route | Selector | Surface | Pattern | Style | Suggestion |');
+    lines.push('|---------|-------|----------|---------|---------|-------|------------|');
     for (const item of diff.discoverable_not_documented) {
-      lines.push(`| ${item.trigger_label} | ${item.trigger_route} | \`${item.trigger_selector}\` |`);
+      const se = item.surface_evidence || {};
+      const hasSurf = se.has_surface ? 'yes' : 'no';
+      const pattern = se.surface_pattern || '-';
+      const style = (se.surface_styleTokens || []).join(', ') || '-';
+      lines.push(`| ${item.trigger_label} | ${item.trigger_route} | \`${item.trigger_selector}\` | ${hasSurf} | ${pattern} | ${style} | ${item.doc_suggestion || '-'} |`);
     }
   }
   lines.push('');
-
-  // Burial Index
-  lines.push('## Burial Index');
+  lines.push('---');
   lines.push('');
-  if (diff.burial_index.length === 0) {
-    lines.push('No triggers found.');
+
+  // --- Ambiguous Matches ---
+  lines.push(`## Ambiguous Matches (${diff.ambiguous_matches.length})`);
+  lines.push('');
+
+  if (diff.ambiguous_matches.length === 0) {
+    lines.push('No ambiguous matches found.');
   } else {
-    lines.push('| Trigger | Route | Depth | Primary Nav | Overflow | Score |');
-    lines.push('|---------|-------|-------|-------------|----------|-------|');
-    for (const item of diff.burial_index) {
-      lines.push(`| ${item.trigger_label} | ${item.route} | ${item.depth} | ${item.in_primary_nav ? 'yes' : 'no'} | ${item.behind_overflow ? 'yes' : 'no'} | ${item.burial_score} |`);
+    for (const item of diff.ambiguous_matches) {
+      lines.push(`### ${item.feature_name}`);
+      lines.push('');
+      lines.push(`- **Confidence gap:** ${item.confidence_gap.toFixed(2)}`);
+      lines.push('- **Tied candidates:**');
+      lines.push('');
+      lines.push('  | Candidate | Source | Composite |');
+      lines.push('  |-----------|--------|-----------|');
+      for (const c of item.tied_candidates) {
+        lines.push(`  | ${c.source_label} | ${c.source_type} ${c.source_route} | ${c.composite_score.toFixed(2)} |`);
+      }
+      lines.push('');
     }
   }
   lines.push('');
+  lines.push('---');
+  lines.push('');
 
-  // Matched
+  // --- Matched ---
   lines.push(`## Matched (${diff.matched.length})`);
   lines.push('');
   if (diff.matched.length === 0) {
@@ -329,6 +419,22 @@ function generateReport(diff) {
     lines.push('|---------|---------|------------|------------|');
     for (const item of diff.matched) {
       lines.push(`| ${item.feature_name} | ${item.trigger_label} | ${item.match_type} | ${item.confidence.toFixed(2)} |`);
+    }
+  }
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+
+  // --- Burial Index ---
+  lines.push('## Burial Index');
+  lines.push('');
+  if (diff.burial_index.length === 0) {
+    lines.push('No triggers found.');
+  } else {
+    lines.push('| Trigger | Route | Depth | Primary Nav | Overflow | Score |');
+    lines.push('|---------|-------|-------|-------------|----------|-------|');
+    for (const item of diff.burial_index) {
+      lines.push(`| ${item.trigger_label} | ${item.route} | ${item.depth} | ${item.in_primary_nav ? 'yes' : 'no'} | ${item.behind_overflow ? 'yes' : 'no'} | ${item.burial_score} |`);
     }
   }
   lines.push('');

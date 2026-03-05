@@ -38,4 +38,52 @@
  * @property {{ total_nodes: number, surfaces_extracted: number }} stats
  */
 
+// =============================================================================
+// Phase 1.3: Diagnostic types
+// =============================================================================
+
+/**
+ * @typedef {Object} CandidateAttempt
+ * @property {'trigger'|'surface'} source_type
+ * @property {string} source_id     - trigger key or surface nodeId
+ * @property {string} source_label  - display label
+ * @property {string} source_route  - route where candidate was found
+ * @property {number} label_score   - matchScore(feature, candidate)
+ * @property {number} pattern_score - pattern affinity (0-1)
+ * @property {number} intent_score  - intent affinity (0-1)
+ * @property {number} style_score   - style token affinity (0-1)
+ * @property {number} composite_score - weighted combination
+ * @property {string} match_dimension - highest-scoring dimension
+ */
+
+/**
+ * @typedef {'label_mismatch'|'intent_mismatch'|'pattern_mismatch'|'missing_surface'} FailureReason
+ */
+
+/**
+ * @typedef {Object} FixSuggestion
+ * @property {string} action   - Human-readable fix
+ * @property {string} rule     - Which heuristic fired
+ * @property {string} tag_hint - data-aiui attribute suggestion
+ */
+
+/**
+ * @typedef {Object} EnrichedUnmatched
+ * @property {string} feature_id
+ * @property {string} feature_name
+ * @property {string[]} sources
+ * @property {FailureReason} failure_reason
+ * @property {CandidateAttempt[]} top_candidates - up to 3
+ * @property {FixSuggestion[]} suggestions
+ * @property {string} reason - backward-compat reason string
+ */
+
+/**
+ * @typedef {Object} AmbiguousMatch
+ * @property {string} feature_id
+ * @property {string} feature_name
+ * @property {CandidateAttempt[]} tied_candidates
+ * @property {number} confidence_gap
+ */
+
 export {};
