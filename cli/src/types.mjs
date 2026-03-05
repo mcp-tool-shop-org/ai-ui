@@ -5,11 +5,12 @@
  * @property {{ globs: string[], cliHelp: string|null }} docs
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string }} probe
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string }} output
  * @property {VerifyConfig} verify
  * @property {BaselineConfig} baseline
  * @property {MemoryConfig} memory
  * @property {RuntimeEffectsConfig} runtimeEffects
+ * @property {CoverageGateConfig} coverageGate
  */
 
 /**
@@ -244,6 +245,8 @@
  * @property {BaselineDelta[]} [baseline_deltas] - Delta comparison if baseline existed
  * @property {string} [baseline_id]              - Baseline created_at timestamp
  * @property {MustSurfaceResult[]} [must_surface_results] - Per-feature must-surface check results
+ * @property {CoverageGateResult} [coverage_gate]        - Coverage CI gate result (Phase 8)
+ * @property {ActionSummary} [action_summary]             - Compact summary for CI logs (Phase 8)
  */
 
 // =============================================================================
@@ -265,6 +268,7 @@
  * @property {Record<string, string>} artifact_versions
  * @property {string} memory_hash
  * @property {string} verify_config_hash
+ * @property {CoverageBaselineSlice} [coverage] - Coverage gate data (Phase 8)
  */
 
 /**
@@ -586,6 +590,55 @@
  * @property {number} maxTriggersPerRoute
  * @property {number} windowMs
  * @property {RuntimeEffectsSafeConfig} safe
+ */
+
+// =============================================================================
+// Phase 8: CI Gate types
+// =============================================================================
+
+/** @typedef {'none'|'minimum'|'regressions'} GateMode */
+
+/**
+ * @typedef {Object} CoverageGateConfig
+ * @property {number} minCoveragePercent       - Floor for coverage_percent in 'minimum' mode
+ * @property {number} maxTotalActions          - Max action count in 'minimum' mode
+ * @property {Record<string, number>|null} [maxActionsByType] - Per-type caps (optional)
+ */
+
+/**
+ * @typedef {Object} CoverageGateResult
+ * @property {GateMode} mode
+ * @property {VerifyBlocker[]} blockers
+ * @property {VerifyWarning[]} warnings
+ * @property {CoverageGateDelta|null} delta
+ */
+
+/**
+ * @typedef {Object} CoverageGateDelta
+ * @property {string[]} new_action_ids         - actionIds in current but not baseline
+ * @property {string[]} resolved_action_ids    - actionIds in baseline but not current
+ * @property {number} coverage_change          - current coverage_percent - baseline
+ * @property {number} action_count_change      - current total - baseline total
+ * @property {Record<string, number>} new_by_type - count of new actions by ActionType
+ */
+
+/**
+ * @typedef {Object} CoverageBaselineSlice
+ * @property {number} coverage_percent
+ * @property {number} total_actions
+ * @property {Record<string, number>} actions_by_type
+ * @property {string[]} action_ids             - sorted for deterministic comparison
+ * @property {string} tool_version
+ * @property {string} config_hash              - SHA-256 of runtimeEffects.safe config
+ */
+
+/**
+ * @typedef {Object} ActionSummary
+ * @property {number} total_actions
+ * @property {Record<string, number>} by_action_type
+ * @property {Record<string, number>} by_surprise_category
+ * @property {string[]} top_action_ids         - first 5 by priority
+ * @property {number} coverage_percent
  */
 
 export {};

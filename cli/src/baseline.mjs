@@ -41,6 +41,39 @@ export function computeConfigHash(verifyConfig) {
 }
 
 // =============================================================================
+// Coverage baseline helpers — pure functions
+// =============================================================================
+
+/**
+ * Compute a SHA-256 hash of the RuntimeEffectsSafeConfig for drift detection.
+ * @param {import('./types.mjs').RuntimeEffectsSafeConfig} safeConfig
+ * @returns {string}
+ */
+export function computeSafeConfigHash(safeConfig) {
+  const sorted = JSON.stringify(safeConfig, Object.keys(safeConfig).sort());
+  return createHash('sha256').update(sorted).digest('hex');
+}
+
+/**
+ * Create a coverage baseline slice from an actionable report.
+ * @param {import('./types.mjs').ActionableReport} actionReport
+ * @param {import('./types.mjs').CoverageReport} coverageReport
+ * @param {string} toolVersion
+ * @param {string} configHash
+ * @returns {import('./types.mjs').CoverageBaselineSlice}
+ */
+export function createCoverageBaselineSlice(actionReport, coverageReport, toolVersion, configHash) {
+  return {
+    coverage_percent: coverageReport.summary.coverage_percent,
+    total_actions: actionReport.summary.total_actions,
+    actions_by_type: { ...actionReport.summary.by_type },
+    action_ids: actionReport.actions.map(a => a.actionId).sort(),
+    tool_version: toolVersion,
+    config_hash: configHash,
+  };
+}
+
+// =============================================================================
 // Baseline creation — pure function
 // =============================================================================
 
@@ -49,16 +82,18 @@ export function computeConfigHash(verifyConfig) {
  * @param {import('./types.mjs').VerifyVerdict} verdict
  * @param {string} memoryHash
  * @param {string} verifyConfigHash
+ * @param {import('./types.mjs').CoverageBaselineSlice} [coverageSlice]
  * @returns {import('./types.mjs').BaselineSnapshot}
  */
-export function createBaseline(verdict, memoryHash, verifyConfigHash) {
+export function createBaseline(verdict, memoryHash, verifyConfigHash, coverageSlice) {
   return {
-    version: '1.0.0',
+    version: coverageSlice ? '1.1.0' : '1.0.0',
     created_at: new Date().toISOString(),
     metrics: { ...verdict.metrics },
     artifact_versions: { ...verdict.artifact_versions },
     memory_hash: memoryHash,
     verify_config_hash: verifyConfigHash,
+    ...(coverageSlice ? { coverage: coverageSlice } : {}),
   };
 }
 
@@ -233,7 +268,21 @@ export async function runBaseline(config, flags) {
 
     const memoryHash = computeMemoryHash(resolve(cwd, config.memory.dir));
     const configHash = computeConfigHash(config.verify);
-    const snapshot = createBaseline(verdict, memoryHash, configHash);
+
+    // Attempt to include coverage slice if artifacts exist
+    let coverageSlice;
+    const coveragePath = resolve(cwd, config.output.runtimeCoverage);
+    const actionsPath = coveragePath.replace('.json', '.actions.json');
+    if (existsSync(coveragePath) && existsSync(actionsPath)) {
+      try {
+        const coverageReport = JSON.parse(readFileSync(coveragePath, 'utf-8'));
+        const actionReport = JSON.parse(readFileSync(actionsPath, 'utf-8'));
+        const safeConfigHash = computeSafeConfigHash(config.runtimeEffects.safe);
+        coverageSlice = createCoverageBaselineSlice(actionReport, coverageReport, '1.0.0', safeConfigHash);
+      } catch { /* ignore — coverage is optional */ }
+    }
+
+    const snapshot = createBaseline(verdict, memoryHash, configHash, coverageSlice);
 
     mkdirSync(dirname(baselinePath), { recursive: true });
     writeFileSync(baselinePath, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
@@ -246,6 +295,9 @@ export async function runBaseline(config, flags) {
       console.log(`  Undocumented: ${m.undocumented_surfaces}`);
       console.log(`  Memory hash: ${snapshot.memory_hash.slice(0, 12)}...`);
       console.log(`  Config hash: ${snapshot.verify_config_hash.slice(0, 12)}...`);
+      if (snapshot.coverage) {
+        console.log(`  Coverage slice: ${snapshot.coverage.total_actions} actions, ${snapshot.coverage.action_ids.length} IDs`);
+      }
     }
   } else {
     // Show mode (default): display current baseline info
@@ -273,5 +325,9 @@ export async function runBaseline(config, flags) {
     console.log(`  Memory hash: ${baseline.memory_hash === 'none' ? 'none' : baseline.memory_hash.slice(0, 12) + '...'}`);
     console.log(`  Config hash: ${baseline.verify_config_hash.slice(0, 12)}...`);
     console.log(`  Artifacts: ${Object.entries(baseline.artifact_versions).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+    if (baseline.coverage) {
+      const c = baseline.coverage;
+      console.log(`  Coverage: ${c.coverage_percent}% | ${c.total_actions} actions | ${c.action_ids.length} IDs`);
+    }
   }
 }

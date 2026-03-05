@@ -1,0 +1,82 @@
+{
+  "coverageReport": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "triggers": [
+      { "trigger_id": "trigger:/|A", "route": "/", "label": "A", "probed": true, "hasSurface": true, "observed": true, "status": "fully_covered", "effects": ["navigate"] },
+      { "trigger_id": "trigger:/|B", "route": "/", "label": "B", "probed": true, "hasSurface": false, "observed": true, "status": "partial", "effects": ["fetch"] },
+      { "trigger_id": "trigger:/|C", "route": "/", "label": "C", "probed": true, "hasSurface": false, "observed": false, "status": "untested", "effects": [] },
+      { "trigger_id": "trigger:/|D", "route": "/", "label": "D", "probed": false, "hasSurface": false, "observed": false, "status": "untested", "effects": [] }
+    ],
+    "summary": {
+      "total": 4,
+      "fully_covered": 1,
+      "partial": 1,
+      "untested": 2,
+      "surprise": 0,
+      "coverage_percent": 25
+    },
+    "surprises": [],
+    "surprises_v2": [
+      { "trigger_id": "trigger:/|X", "label": "X", "route": "/", "category": "new_effect", "detail": "New runtime trigger" },
+      { "trigger_id": "trigger:/|Y", "label": "Y", "route": "/", "category": "risky_skipped", "detail": "Destructive trigger not observed" },
+      { "trigger_id": "trigger:/|Z", "label": "Z", "route": "/", "category": "missing_expected", "expected_id": "effect:submit:/", "detail": "Expected effect not observed" }
+    ]
+  },
+
+  "actionReport_withActions": {
+    "version": "7.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "actions": [
+      { "actionId": "act:aaa00001", "type": "probe_trigger", "priority": 10, "impact": 5, "risk": "safe", "effort": "low", "rationale": "Probe trigger A", "triggerId": "trigger:/|A" },
+      { "actionId": "act:bbb00002", "type": "investigate_missing", "priority": 20, "impact": 5, "risk": "caution", "effort": "med", "rationale": "Missing expected effect", "triggerId": "trigger:/|B", "effectId": "effect:submit:/" },
+      { "actionId": "act:ccc00003", "type": "review_new_effect", "priority": 15, "impact": 0, "risk": "caution", "effort": "low", "rationale": "New runtime trigger", "triggerId": "trigger:/|X" }
+    ],
+    "next_best_probes": [
+      { "trigger_id": "trigger:/|D", "label": "D", "route": "/", "score": 6, "reasons": ["2 outgoing edge(s)"], "risk": "safe" }
+    ],
+    "summary": {
+      "total_actions": 3,
+      "by_type": { "probe_trigger": 1, "investigate_missing": 1, "review_new_effect": 1 },
+      "estimated_coverage_gain": 10
+    }
+  },
+
+  "actionReport_empty": {
+    "version": "7.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "actions": [],
+    "next_best_probes": [],
+    "summary": { "total_actions": 0, "by_type": {}, "estimated_coverage_gain": 0 }
+  },
+
+  "baselineCoverage_matching": {
+    "coverage_percent": 25,
+    "total_actions": 3,
+    "actions_by_type": { "probe_trigger": 1, "investigate_missing": 1, "review_new_effect": 1 },
+    "action_ids": ["act:aaa00001", "act:bbb00002", "act:ccc00003"],
+    "tool_version": "1.0.0",
+    "config_hash": "abc123"
+  },
+
+  "baselineCoverage_better": {
+    "coverage_percent": 70,
+    "total_actions": 1,
+    "actions_by_type": { "probe_trigger": 1 },
+    "action_ids": ["act:aaa00001"],
+    "tool_version": "1.0.0",
+    "config_hash": "abc123"
+  },
+
+  "gateConfig_strict": {
+    "minCoveragePercent": 80,
+    "maxTotalActions": 2,
+    "maxActionsByType": { "investigate_missing": 0 }
+  },
+
+  "gateConfig_permissive": {
+    "minCoveragePercent": 0,
+    "maxTotalActions": 999,
+    "maxActionsByType": null
+  }
+}

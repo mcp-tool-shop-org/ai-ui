@@ -717,6 +717,35 @@ export function renderActionsMarkdown(actionReport) {
   return lines.join('\n');
 }
 
+/**
+ * Build a compact action summary for CI log readability.
+ * @param {import('./types.mjs').CoverageAction[]} actions
+ * @param {import('./types.mjs').SurpriseEntryV2[]} surprisesV2
+ * @param {number} coveragePercent
+ * @returns {import('./types.mjs').ActionSummary}
+ */
+export function buildActionSummary(actions, surprisesV2, coveragePercent) {
+  /** @type {Record<string, number>} */
+  const byActionType = {};
+  for (const a of actions) {
+    byActionType[a.type] = (byActionType[a.type] || 0) + 1;
+  }
+
+  /** @type {Record<string, number>} */
+  const bySurpriseCategory = {};
+  for (const s of surprisesV2) {
+    bySurpriseCategory[s.category] = (bySurpriseCategory[s.category] || 0) + 1;
+  }
+
+  return {
+    total_actions: actions.length,
+    by_action_type: byActionType,
+    by_surprise_category: bySurpriseCategory,
+    top_action_ids: actions.slice(0, 5).map(a => a.actionId),
+    coverage_percent: coveragePercent,
+  };
+}
+
 // =============================================================================
 // Render markdown
 // =============================================================================
@@ -858,6 +887,12 @@ export async function runRuntimeCoverage(config, flags) {
 
     const actionsPath = coveragePath.replace('.json', '.actions.json');
     writeFileSync(actionsPath, JSON.stringify(actionReport, null, 2) + '\n', 'utf-8');
+
+    // Always write action summary alongside actions
+    const summary = buildActionSummary(actions, surprisesV2, report.summary.coverage_percent);
+    const summaryPath = resolve(cwd, config.output.actionSummary);
+    mkdirSync(dirname(summaryPath), { recursive: true });
+    writeFileSync(summaryPath, JSON.stringify(summary, null, 2) + '\n', 'utf-8');
 
     md += '\n' + renderActionsMarkdown(actionReport);
 

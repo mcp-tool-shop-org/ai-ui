@@ -5,6 +5,7 @@ import { fail } from './config.mjs';
 import { loadMemory, applyExceptions } from './memory.mjs';
 import { compareBaseline, applyBaselineRules, computeMemoryHash, computeConfigHash } from './baseline.mjs';
 import { loadMustSurface, checkMustSurface } from './must-surface.mjs';
+import { buildActionSummary } from './runtime-coverage.mjs';
 
 // =============================================================================
 // Metric extraction — pure function
@@ -158,6 +159,145 @@ export function generateVerdict(metrics, blockers, warnings, artifactVersions) {
 }
 
 // =============================================================================
+// Coverage gate — pure function
+// =============================================================================
+
+const TOOL_VERSION = '1.0.0';
+
+/**
+ * Apply coverage gate rules based on mode.
+ * @param {import('./types.mjs').GateMode} mode
+ * @param {import('./types.mjs').ActionableReport} actionReport
+ * @param {import('./types.mjs').CoverageReport} coverageReport
+ * @param {import('./types.mjs').CoverageGateConfig} gateConfig
+ * @param {import('./types.mjs').CoverageBaselineSlice|null} [baselineCoverage]
+ * @returns {import('./types.mjs').CoverageGateResult}
+ */
+export function applyCoverageGate(mode, actionReport, coverageReport, gateConfig, baselineCoverage) {
+  /** @type {import('./types.mjs').VerifyBlocker[]} */
+  const blockers = [];
+  /** @type {import('./types.mjs').VerifyWarning[]} */
+  const warnings = [];
+  /** @type {import('./types.mjs').CoverageGateDelta|null} */
+  let delta = null;
+
+  if (mode === 'none') {
+    return { mode, blockers, warnings, delta };
+  }
+
+  if (mode === 'minimum') {
+    // Rule 1: coverage floor
+    if (coverageReport.summary.coverage_percent < gateConfig.minCoveragePercent) {
+      blockers.push({
+        rule: 'gate_min_coverage',
+        message: `Coverage ${coverageReport.summary.coverage_percent}% below floor ${gateConfig.minCoveragePercent}%`,
+        threshold: gateConfig.minCoveragePercent,
+        actual: coverageReport.summary.coverage_percent,
+      });
+    }
+
+    // Rule 2: total action count cap
+    if (actionReport.summary.total_actions > gateConfig.maxTotalActions) {
+      blockers.push({
+        rule: 'gate_max_actions',
+        message: `${actionReport.summary.total_actions} actions exceed cap ${gateConfig.maxTotalActions}`,
+        threshold: gateConfig.maxTotalActions,
+        actual: actionReport.summary.total_actions,
+      });
+    }
+
+    // Rule 3: per-type caps
+    if (gateConfig.maxActionsByType) {
+      for (const [type, max] of Object.entries(gateConfig.maxActionsByType)) {
+        const actual = actionReport.summary.by_type[type] || 0;
+        if (actual > max) {
+          blockers.push({
+            rule: `gate_max_${type}`,
+            message: `${actual} '${type}' actions exceed cap ${max}`,
+            threshold: max,
+            actual,
+          });
+        }
+      }
+    }
+
+    blockers.sort((a, b) => a.rule.localeCompare(b.rule));
+    return { mode, blockers, warnings, delta };
+  }
+
+  if (mode === 'regressions') {
+    if (!baselineCoverage) {
+      warnings.push({
+        rule: 'gate_no_baseline',
+        message: 'Regressions mode requested but no coverage baseline found — gate skipped',
+      });
+      return { mode, blockers, warnings, delta };
+    }
+
+    // Set-based comparison using stable DJB2 action IDs
+    const currentIds = new Set(actionReport.actions.map(a => a.actionId));
+    const baselineIds = new Set(baselineCoverage.action_ids);
+
+    const newIds = [...currentIds].filter(id => !baselineIds.has(id)).sort();
+    const resolvedIds = [...baselineIds].filter(id => !currentIds.has(id)).sort();
+
+    const coverageChange = coverageReport.summary.coverage_percent - baselineCoverage.coverage_percent;
+    const actionCountChange = actionReport.summary.total_actions - baselineCoverage.total_actions;
+
+    // Count new actions by type
+    /** @type {Record<string, number>} */
+    const newByType = {};
+    for (const a of actionReport.actions) {
+      if (newIds.includes(a.actionId)) {
+        newByType[a.type] = (newByType[a.type] || 0) + 1;
+      }
+    }
+
+    delta = {
+      new_action_ids: newIds,
+      resolved_action_ids: resolvedIds,
+      coverage_change: coverageChange,
+      action_count_change: actionCountChange,
+      new_by_type: newByType,
+    };
+
+    // Blocker: new actions appeared
+    if (newIds.length > 0) {
+      blockers.push({
+        rule: 'gate_new_actions',
+        message: `${newIds.length} new action(s) not in baseline: ${newIds.slice(0, 3).join(', ')}${newIds.length > 3 ? '...' : ''}`,
+        threshold: 0,
+        actual: newIds.length,
+      });
+    }
+
+    // Blocker: coverage dropped
+    if (coverageChange < 0) {
+      blockers.push({
+        rule: 'gate_coverage_regression',
+        message: `Coverage regressed from ${baselineCoverage.coverage_percent}% to ${coverageReport.summary.coverage_percent}% (${coverageChange}%)`,
+        threshold: baselineCoverage.coverage_percent,
+        actual: coverageReport.summary.coverage_percent,
+      });
+    }
+
+    // Warning: tool version mismatch
+    if (baselineCoverage.tool_version && baselineCoverage.tool_version !== TOOL_VERSION) {
+      warnings.push({
+        rule: 'gate_version_mismatch',
+        message: `Baseline tool version ${baselineCoverage.tool_version} differs from current ${TOOL_VERSION}`,
+      });
+    }
+
+    blockers.sort((a, b) => a.rule.localeCompare(b.rule));
+    warnings.sort((a, b) => a.rule.localeCompare(b.rule));
+    return { mode, blockers, warnings, delta };
+  }
+
+  return { mode: 'none', blockers, warnings, delta };
+}
+
+// =============================================================================
 // Markdown report
 // =============================================================================
 
@@ -268,6 +408,68 @@ export function generateVerifyReport(verdict, planEntries) {
           ? `${d.current_value}%`
           : String(d.current_value);
       lines.push(`| ${formatMetricName(d.metric)} | ${baseStr} | ${currStr} | ${changeStr} | ${d.direction} |`);
+    }
+    lines.push('');
+  }
+
+  // Coverage gate
+  if (verdict.coverage_gate && verdict.coverage_gate.mode !== 'none') {
+    const cg = verdict.coverage_gate;
+    const gatePass = cg.blockers.length === 0;
+    lines.push('## Coverage Gate');
+    lines.push('');
+    lines.push(`Mode: **${cg.mode}** — ${gatePass ? 'PASS' : 'FAIL'}`);
+    lines.push('');
+
+    if (cg.blockers.length > 0) {
+      for (const b of cg.blockers) {
+        lines.push(`- **${b.rule}**: ${b.message}`);
+      }
+      lines.push('');
+    }
+
+    if (cg.delta) {
+      const d = cg.delta;
+      lines.push(`| Metric | Value |`);
+      lines.push(`|--------|-------|`);
+      lines.push(`| New actions | ${d.new_action_ids.length} |`);
+      lines.push(`| Resolved actions | ${d.resolved_action_ids.length} |`);
+      lines.push(`| Coverage change | ${d.coverage_change >= 0 ? '+' : ''}${d.coverage_change}% |`);
+      lines.push(`| Action count change | ${d.action_count_change >= 0 ? '+' : ''}${d.action_count_change} |`);
+      lines.push('');
+
+      if (d.new_action_ids.length > 0) {
+        lines.push('New action IDs:');
+        for (const id of d.new_action_ids.slice(0, 10)) {
+          const typeEntry = Object.entries(d.new_by_type).find(([, count]) => count > 0);
+          lines.push(`- \`${id}\``);
+        }
+        if (d.new_action_ids.length > 10) lines.push(`- ... and ${d.new_action_ids.length - 10} more`);
+        lines.push('');
+      }
+    }
+
+    if (cg.warnings.length > 0) {
+      for (const w of cg.warnings) {
+        lines.push(`- ${w.message}`);
+      }
+      lines.push('');
+    }
+  }
+
+  // Action summary
+  if (verdict.action_summary) {
+    const as = verdict.action_summary;
+    lines.push('## Action Summary');
+    lines.push('');
+    lines.push(`Coverage: **${as.coverage_percent}%** | Actions: **${as.total_actions}**`);
+    if (Object.keys(as.by_action_type).length > 0) {
+      lines.push('');
+      lines.push('By type: ' + Object.entries(as.by_action_type).map(([k, v]) => `${k}=${v}`).join(', '));
+    }
+    if (Object.keys(as.by_surprise_category).length > 0) {
+      lines.push('');
+      lines.push('Surprises: ' + Object.entries(as.by_surprise_category).map(([k, v]) => `${k}=${v}`).join(', '));
     }
     lines.push('');
   }
@@ -461,6 +663,50 @@ export async function runVerify(config, flags) {
     }
   }
 
+  // Coverage gate (if coverage artifacts exist and --gate is set)
+  let coverageGateResult = null;
+  let actionSummaryResult = null;
+  const gateMode = /** @type {import('./types.mjs').GateMode} */ (flags.gate || 'none');
+  const coveragePath = resolve(cwd, config.output.runtimeCoverage);
+  const actionsPath = coveragePath.replace('.json', '.actions.json');
+  if (existsSync(coveragePath) && existsSync(actionsPath)) {
+    try {
+      const coverageReport = JSON.parse(readFileSync(coveragePath, 'utf-8'));
+      const actionReport = JSON.parse(readFileSync(actionsPath, 'utf-8'));
+
+      // Override min coverage from flags if provided
+      const gateConfig = { ...config.coverageGate };
+      if (flags.minCoverage !== undefined) {
+        gateConfig.minCoveragePercent = flags.minCoverage;
+      }
+
+      // Load baseline coverage slice if baseline exists
+      let baselineCoverage = null;
+      if (existsSync(baselinePath)) {
+        try {
+          const bl = JSON.parse(readFileSync(baselinePath, 'utf-8'));
+          baselineCoverage = bl.coverage || null;
+        } catch { /* already warned above */ }
+      }
+
+      coverageGateResult = applyCoverageGate(gateMode, actionReport, coverageReport, gateConfig, baselineCoverage);
+      blockers.push(...coverageGateResult.blockers);
+      warnings.push(...coverageGateResult.warnings);
+      blockers.sort((a, b) => a.rule.localeCompare(b.rule));
+      warnings.sort((a, b) => a.rule.localeCompare(b.rule));
+
+      // Build action summary
+      actionSummaryResult = buildActionSummary(
+        actionReport.actions,
+        coverageReport.surprises_v2 || [],
+        coverageReport.summary.coverage_percent,
+      );
+    } catch (e) {
+      warnings.push({ rule: 'coverage_parse', message: `Failed to parse coverage artifacts: ${e.message}` });
+      warnings.sort((a, b) => a.rule.localeCompare(b.rule));
+    }
+  }
+
   const verdict = generateVerdict(metrics, blockers, warnings, artifactVersions);
   if (baselineDeltas) {
     verdict.baseline_deltas = baselineDeltas;
@@ -468,6 +714,12 @@ export async function runVerify(config, flags) {
   }
   if (mustSurfaceResults) {
     verdict.must_surface_results = mustSurfaceResults;
+  }
+  if (coverageGateResult) {
+    verdict.coverage_gate = coverageGateResult;
+  }
+  if (actionSummaryResult) {
+    verdict.action_summary = actionSummaryResult;
   }
 
   // Output
@@ -521,6 +773,17 @@ export async function runVerify(config, flags) {
         for (const r of violations) {
           console.log(`    [${r.severity}] ${r.feature_id}: ${r.status}`);
         }
+      }
+      if (coverageGateResult && coverageGateResult.mode !== 'none') {
+        const gatePass = coverageGateResult.blockers.length === 0;
+        console.log(`  Coverage gate: ${coverageGateResult.mode} — ${gatePass ? 'PASS' : 'FAIL'}`);
+        if (coverageGateResult.delta) {
+          const d = coverageGateResult.delta;
+          console.log(`    New: ${d.new_action_ids.length}, Resolved: ${d.resolved_action_ids.length}, Coverage: ${d.coverage_change >= 0 ? '+' : ''}${d.coverage_change}%`);
+        }
+      }
+      if (actionSummaryResult) {
+        console.log(`  Action summary: ${actionSummaryResult.total_actions} actions, ${actionSummaryResult.coverage_percent}% coverage`);
       }
     }
   }

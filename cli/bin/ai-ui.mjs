@@ -46,6 +46,8 @@ Options:
   --with-runtime    (graph) Augment graph with runtime-effects data
   --actions         (runtime-coverage) Generate actionable work queue
   --actions-top <n> (runtime-coverage) Max actions to include (default: 20)
+  --gate <mode>     (verify) Coverage CI gate: none|minimum|regressions (default: none)
+  --min-coverage <n> (verify) Override min coverage % for minimum gate mode
   --memory-strict   Fail if memory files don't parse
   --help            Show this help
   --version         Show version
@@ -150,7 +152,7 @@ async function main() {
  * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean, runPipeline: boolean, strict: boolean, json: boolean, write: boolean, force: boolean, noMemory: boolean, memoryStrict: boolean }}
  */
 function parseFlags(args) {
-  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined };
+  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined, gate: undefined, minCoverage: undefined };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--config' && args[i + 1]) {
@@ -199,6 +201,15 @@ function parseFlags(args) {
       flags.actions = true;
     } else if (a === '--actions-top' && args[i + 1]) {
       flags.actionsTop = parseInt(args[++i], 10);
+    } else if (a === '--gate' && args[i + 1]) {
+      const mode = args[++i];
+      if (!['none', 'minimum', 'regressions'].includes(mode)) {
+        console.error(`Error: --gate must be none, minimum, or regressions (got: ${mode})`);
+        process.exit(1);
+      }
+      flags.gate = mode;
+    } else if (a === '--min-coverage' && args[i + 1]) {
+      flags.minCoverage = parseInt(args[++i], 10);
     }
   }
   return flags;

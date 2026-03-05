@@ -39,6 +39,7 @@ const DEFAULTS = {
     runtimeEffectsSummary: 'ai-ui-output/runtime-effects.summary.json',
     runtimeCoverage: 'ai-ui-output/runtime-coverage.json',
     runtimeCoverageReport: 'ai-ui-output/runtime-coverage.md',
+    actionSummary: 'ai-ui-output/action-summary.json',
   },
   verify: {
     maxOrphanRatio: 0.25,
@@ -53,6 +54,11 @@ const DEFAULTS = {
   memory: {
     dir: 'ai-ui-memory',
     strict: false,
+  },
+  coverageGate: {
+    minCoveragePercent: 0,
+    maxTotalActions: Infinity,
+    maxActionsByType: null,
   },
   runtimeEffects: {
     routes: ['/'],

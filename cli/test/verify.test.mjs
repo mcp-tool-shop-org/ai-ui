@@ -9,6 +9,7 @@ import {
   applyRules,
   generateVerdict,
   generateVerifyReport,
+  applyCoverageGate,
 } from '../src/verify.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -394,5 +395,102 @@ describe('edge cases', () => {
     const report = generateVerifyReport(verdict, []);
     assert.ok(report.includes('# AI-UI Verify: PASS'));
     assert.ok(!report.includes('## Top Recommended Fixes'));
+  });
+});
+
+// =============================================================================
+// Coverage Gate in report
+// =============================================================================
+
+describe('generateVerifyReport — coverage gate', () => {
+  const baseVerdict = () => {
+    const m = extractMetrics(fixtures.passing.diff, fixtures.passing.plan, fixtures.passing.graph);
+    return generateVerdict(m, [], [], { diff: '1.1.0', graph: '1.0.0', plan: '1.0.0' });
+  };
+
+  it('includes Coverage Gate section when verdict has coverage_gate', () => {
+    const verdict = baseVerdict();
+    verdict.coverage_gate = {
+      mode: 'minimum',
+      blockers: [{ rule: 'gate_min_coverage', message: 'Coverage 25% below floor 80%', threshold: 80, actual: 25 }],
+      warnings: [],
+      delta: null,
+    };
+    const report = generateVerifyReport(verdict, []);
+    assert.ok(report.includes('## Coverage Gate'));
+    assert.ok(report.includes('minimum'));
+    assert.ok(report.includes('FAIL'));
+    assert.ok(report.includes('gate_min_coverage'));
+  });
+
+  it('omits Coverage Gate section when mode is none', () => {
+    const verdict = baseVerdict();
+    verdict.coverage_gate = { mode: 'none', blockers: [], warnings: [], delta: null };
+    const report = generateVerifyReport(verdict, []);
+    assert.ok(!report.includes('## Coverage Gate'));
+  });
+
+  it('omits Coverage Gate section when absent', () => {
+    const verdict = baseVerdict();
+    const report = generateVerifyReport(verdict, []);
+    assert.ok(!report.includes('## Coverage Gate'));
+  });
+
+  it('renders regressions delta table', () => {
+    const verdict = baseVerdict();
+    verdict.coverage_gate = {
+      mode: 'regressions',
+      blockers: [{ rule: 'gate_new_actions', message: '2 new', threshold: 0, actual: 2 }],
+      warnings: [],
+      delta: {
+        new_action_ids: ['act:bbb00002', 'act:ccc00003'],
+        resolved_action_ids: [],
+        coverage_change: -5,
+        action_count_change: 2,
+        new_by_type: { investigate_missing: 1, review_new_effect: 1 },
+      },
+    };
+    const report = generateVerifyReport(verdict, []);
+    assert.ok(report.includes('New actions'));
+    assert.ok(report.includes('act:bbb00002'));
+    assert.ok(report.includes('-5%'));
+  });
+
+  it('gate blockers make verdict pass=false', () => {
+    const m = extractMetrics(fixtures.passing.diff, fixtures.passing.plan, fixtures.passing.graph);
+    const gateBlockers = [{ rule: 'gate_min_coverage', message: 'Below floor', threshold: 80, actual: 25 }];
+    const verdict = generateVerdict(m, gateBlockers, [], { diff: '1.1.0' });
+    assert.equal(verdict.pass, false);
+    assert.equal(verdict.exit_code, 1);
+  });
+});
+
+// =============================================================================
+// Action Summary in report
+// =============================================================================
+
+describe('generateVerifyReport — action summary', () => {
+  it('includes Action Summary section when present', () => {
+    const m = extractMetrics(fixtures.passing.diff, fixtures.passing.plan, fixtures.passing.graph);
+    const verdict = generateVerdict(m, [], [], {});
+    verdict.action_summary = {
+      total_actions: 3,
+      by_action_type: { probe_trigger: 1, investigate_missing: 1, review_new_effect: 1 },
+      by_surprise_category: { new_effect: 1, risky_skipped: 1 },
+      top_action_ids: ['act:aaa00001', 'act:bbb00002', 'act:ccc00003'],
+      coverage_percent: 25,
+    };
+    const report = generateVerifyReport(verdict, []);
+    assert.ok(report.includes('## Action Summary'));
+    assert.ok(report.includes('25%'));
+    assert.ok(report.includes('3'));
+    assert.ok(report.includes('probe_trigger=1'));
+  });
+
+  it('omits Action Summary when absent', () => {
+    const m = extractMetrics(fixtures.passing.diff, fixtures.passing.plan, fixtures.passing.graph);
+    const verdict = generateVerdict(m, [], [], {});
+    const report = generateVerifyReport(verdict, []);
+    assert.ok(!report.includes('## Action Summary'));
   });
 });
