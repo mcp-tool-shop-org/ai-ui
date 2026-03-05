@@ -6,6 +6,7 @@ import { normalize, matchScore } from './normalize.mjs';
 import { ONBOARDING_WORDS, ADVANCED_WORDS, DATA_WORDS } from './diagnostics.mjs';
 import { generateSuggestions } from './diagnostics.mjs';
 import { buildGraph, computeSurfacingValues } from './trigger-graph.mjs';
+import { loadMemory, applyDecisions } from './memory.mjs';
 
 // =============================================================================
 // Intent classification keywords
@@ -320,17 +321,42 @@ export function assignPriority(intent, ruleName) {
  * @param {{ features: import('./types.mjs').Feature[] }} atlas
  * @param {import('./types.mjs').Surface[]} surfaces
  * @param {any[]} triggers - Probe trigger entries
+ * @param {import('./types.mjs').LoadedMemory | null} [memory=null]
  * @returns {import('./types.mjs').SurfacingPlan}
  */
-export function composeSurfacingPlan(diff, graph, atlas, surfaces, triggers) {
+export function composeSurfacingPlan(diff, graph, atlas, surfaces, triggers, memory = null) {
   const surfacingValues = computeSurfacingValues(graph, diff.burial_index || []);
   const orphans = diff.documented_not_discoverable || [];
   const featureMap = new Map(atlas.features.map(f => [f.id, f]));
 
+  // Split orphans by memory decisions
+  const decisions = memory?.decisions || {};
+  const { decided, undecided } = applyDecisions(orphans, decisions);
+
   /** @type {import('./types.mjs').PlanEntry[]} */
   const plans = [];
 
-  for (const orphan of orphans) {
+  // Memory-decided orphans: use decision overrides
+  for (const { orphan, decision } of decided) {
+    const feature = featureMap.get(orphan.feature_id);
+    if (!feature) continue;
+
+    const intent = classifyIntent(feature);
+    const overrideRule = { action: '', rule: decision.rule, tag_hint: `feature.${feature.id}` };
+    const evidence = orphan.sources || feature.sources.map(s => `${s.file}:${s.line}`);
+    const diffReason = orphan.failure_reason || 'missing_surface';
+    const entry = materializePlan(feature, overrideRule, intent, graph, surfaces, diffReason, evidence);
+
+    // Apply memory overrides
+    entry.priority = decision.priority;
+    if (decision.route) entry.placement.route = decision.route;
+    entry.why.memory_decision = decision.reason || 'Memory decision';
+
+    plans.push(entry);
+  }
+
+  // Undecided orphans: original AI path
+  for (const orphan of undecided) {
     const feature = featureMap.get(orphan.feature_id);
     if (!feature) continue;
 
@@ -517,7 +543,7 @@ export function generatePlanDot(plan) {
 /**
  * Run the Compose command.
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ verbose?: boolean }} flags
+ * @param {{ verbose?: boolean, noMemory?: boolean, memoryStrict?: boolean }} flags
  */
 export async function runCompose(config, flags) {
   const cwd = process.cwd();
@@ -577,13 +603,18 @@ export async function runCompose(config, flags) {
     graph = buildGraph(triggers, routeChanges, surfaces, atlas.features || [], diff);
   }
 
+  // Load memory
+  const memory = flags.noMemory ? null : loadMemory(resolve(cwd, config.memory.dir), flags.memoryStrict);
+  const decisionCount = memory ? Object.keys(memory.decisions).length : 0;
+
   if (flags.verbose) {
     const orphanCount = (diff.documented_not_discoverable || []).length;
-    console.log(`Compose: ${orphanCount} orphan features to plan for`);
+    console.log(`Compose: ${orphanCount} orphan features to plan for` +
+      (decisionCount > 0 ? ` (${decisionCount} memory decision(s))` : ''));
   }
 
   // Compose
-  const plan = composeSurfacingPlan(diff, graph, atlas, surfaces, triggers);
+  const plan = composeSurfacingPlan(diff, graph, atlas, surfaces, triggers, memory);
 
   // Write surfacing-plan.json
   const planPath = resolve(cwd, config.output.composePlan);

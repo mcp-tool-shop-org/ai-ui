@@ -1,0 +1,128 @@
+{
+  "mappings": {
+    "color-roles": {
+      "trigger_label": "Color Roles",
+      "reason": "Confirmed match after v1.2 redesign"
+    },
+    "type-scale": {
+      "trigger_label": "Typography Settings",
+      "reason": "Renamed in UI, same feature"
+    }
+  },
+  "decisions": {
+    "fast-iteration": {
+      "priority": "P1",
+      "rule": "hero_cta",
+      "route": "/",
+      "reason": "Key differentiator, deserves hero placement"
+    },
+    "spacing": {
+      "priority": "P0",
+      "rule": "nav_menu_available",
+      "route": "/design",
+      "reason": "Critical design token, must be in nav"
+    }
+  },
+  "exceptions": {
+    "oauth-provider": {
+      "reason": "Planned for v2, not applicable yet",
+      "exclude_from": ["orphan_count", "coverage"]
+    },
+    "admin-panel": {
+      "reason": "Internal tool, not user-facing",
+      "exclude_from": ["orphan_count", "coverage", "p0"]
+    }
+  },
+  "configMapping": {
+    "existing-feature": "Existing Button"
+  },
+  "graph": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-05T00:00:00.000Z",
+    "nodes": [
+      { "id": "feature:oauth-provider", "type": "feature", "label": "OAuth Provider", "meta": {} },
+      { "id": "feature:admin-panel", "type": "feature", "label": "Admin Panel", "meta": {} },
+      { "id": "feature:color-roles", "type": "feature", "label": "Color Roles", "meta": {} },
+      { "id": "feature:visible-feature", "type": "feature", "label": "Visible Feature", "meta": {} },
+      { "id": "trigger:btn-1", "type": "trigger", "label": "Visible Feature", "route": "/", "meta": {} },
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} }
+    ],
+    "edges": [
+      { "from": "trigger:btn-1", "to": "feature:visible-feature", "type": "documents", "weight": 0.95 }
+    ],
+    "stats": {
+      "total_nodes": 6,
+      "by_type": { "feature": 4, "trigger": 1, "route": 1 },
+      "total_edges": 1,
+      "by_edge_type": { "documents": 1, "contains": 0 },
+      "orphan_features": 3,
+      "orphan_triggers": 0
+    }
+  },
+  "metricsBase": {
+    "total_features": 4,
+    "orphan_features": 3,
+    "orphan_ratio": 0.75,
+    "coverage_percent": 25,
+    "p0_count": 0,
+    "p1_count": 0,
+    "p2_count": 3,
+    "undocumented_surfaces": 2,
+    "ambiguous_matches": 1,
+    "high_burial_triggers": 0,
+    "memory_excluded": 0
+  },
+  "diffWithAmbiguous": {
+    "version": "1.1.0",
+    "ambiguous_matches": [
+      {
+        "feature_id": "fast-iteration",
+        "feature_name": "Fast iteration",
+        "tied_candidates": [
+          { "source_type": "trigger", "source_id": "trigger:btn-fast", "source_label": "Fast Mode", "source_route": "/", "composite_score": 0.82 },
+          { "source_type": "trigger", "source_id": "trigger:btn-iter", "source_label": "Iterate", "source_route": "/", "composite_score": 0.80 }
+        ],
+        "confidence_gap": 0.02
+      }
+    ],
+    "documented_not_discoverable": [
+      {
+        "feature_id": "type-scale",
+        "feature_name": "Type scale",
+        "sources": ["README.md:59"],
+        "failure_reason": "label_mismatch",
+        "top_candidates": [
+          { "source_type": "trigger", "source_id": "trigger:typo", "source_label": "Typography", "source_route": "/", "composite_score": 0.35 }
+        ],
+        "suggestions": []
+      },
+      {
+        "feature_id": "spacing",
+        "feature_name": "Spacing",
+        "sources": ["README.md:58"],
+        "failure_reason": "missing_surface",
+        "top_candidates": [
+          { "source_type": "trigger", "source_id": "trigger:sp", "source_label": "Spacer", "source_route": "/", "composite_score": 0.20 }
+        ],
+        "suggestions": []
+      }
+    ],
+    "matched": [],
+    "burial_index": [],
+    "stats": {
+      "total_features": 4,
+      "total_triggers": 3,
+      "total_surfaces": 0,
+      "matched": 0,
+      "documented_not_discoverable": 2,
+      "discoverable_not_documented": 0,
+      "ambiguous_matches": 1,
+      "coverage_percent": 0
+    }
+  },
+  "orphans": [
+    { "feature_id": "fast-iteration", "feature_name": "Fast iteration", "sources": ["README.md:70"], "failure_reason": "missing_surface" },
+    { "feature_id": "spacing", "feature_name": "Spacing", "sources": ["README.md:58"], "failure_reason": "missing_surface" },
+    { "feature_id": "color-roles", "feature_name": "Color roles", "sources": ["README.md:60"], "failure_reason": "missing_surface" }
+  ]
+}

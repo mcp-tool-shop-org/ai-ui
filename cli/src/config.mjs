@@ -37,6 +37,10 @@ const DEFAULTS = {
     maxUndocumentedSurfaces: 10,
     failOnP0Orphans: true,
   },
+  memory: {
+    dir: 'ai-ui-memory',
+    strict: false,
+  },
 };
 
 /**

@@ -17,6 +17,7 @@
     "graph": "node cli/bin/ai-ui.mjs graph",
     "compose": "node cli/bin/ai-ui.mjs compose",
     "verify": "node cli/bin/ai-ui.mjs verify",
+    "init-memory": "node cli/bin/ai-ui.mjs init-memory",
     "stage0": "node cli/bin/ai-ui.mjs stage0",
     "test": "node --test cli/test/**/*.test.mjs"
   },

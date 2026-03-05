@@ -7,6 +7,7 @@
  * @property {Record<string, string>} mapping
  * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string }} output
  * @property {VerifyConfig} verify
+ * @property {MemoryConfig} memory
  */
 
 /**
@@ -162,7 +163,7 @@
  * @property {string} feature_name
  * @property {'P0'|'P1'|'P2'} priority
  * @property {IntentClass} intent_class
- * @property {{ diff_reason: string, evidence: string[] }} why
+ * @property {{ diff_reason: string, evidence: string[], memory_decision?: string }} why
  * @property {{ rule: string, route: string, surface_id: string|null, pattern_slot: string }} placement
  * @property {{ label: string, pattern_kind: string, style_tokens: string[], data_aiui: string }} control
  * @property {{ event: string }} trigger
@@ -224,6 +225,7 @@
  * @property {number} undocumented_surfaces
  * @property {number} ambiguous_matches
  * @property {number} high_burial_triggers
+ * @property {number} memory_excluded     - Features excluded by memory exceptions
  */
 
 /**
@@ -236,6 +238,57 @@
  * @property {VerifyBlocker[]} blockers
  * @property {VerifyWarning[]} warnings
  * @property {Record<string, string>} artifact_versions
+ */
+
+// =============================================================================
+// Memory v0 types
+// =============================================================================
+
+/**
+ * @typedef {Object} MemoryConfig
+ * @property {string} dir    - Directory for memory files (default: 'ai-ui-memory')
+ * @property {boolean} strict - Fail if memory files don't parse (default: false)
+ */
+
+/**
+ * @typedef {Object} MemoryMapping
+ * @property {string} trigger_label - Force-match to this trigger/surface label
+ * @property {string} [reason]      - Why this mapping was established
+ */
+
+/**
+ * @typedef {Object} MemoryDecision
+ * @property {'P0'|'P1'|'P2'} priority - Override priority
+ * @property {string} rule              - Override placement rule
+ * @property {string} route             - Override target route
+ * @property {string} [reason]          - Why this decision was made
+ */
+
+/**
+ * @typedef {Object} MemoryException
+ * @property {string} reason                              - Why excluded
+ * @property {('orphan_count'|'coverage'|'p0')[]} exclude_from - Which calculations to exclude from
+ */
+
+/**
+ * @typedef {Object} LoadedMemory
+ * @property {Record<string, MemoryMapping>} mappings
+ * @property {Record<string, MemoryDecision>} decisions
+ * @property {Record<string, MemoryException>} exceptions
+ */
+
+/**
+ * @typedef {Object} SuggestedMapping
+ * @property {string} feature_id
+ * @property {string} trigger_label
+ * @property {number} confidence
+ * @property {string} source - 'ambiguous' | 'near_miss'
+ * @property {string} hint   - Human-readable suggestion
+ */
+
+/**
+ * @typedef {Object} SuggestedMemory
+ * @property {SuggestedMapping[]} mappings
  */
 
 export {};

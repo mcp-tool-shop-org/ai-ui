@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import { fail } from './config.mjs';
+import { loadMemory, applyExceptions } from './memory.mjs';
 
 // =============================================================================
 // Metric extraction — pure function
@@ -46,6 +47,7 @@ export function extractMetrics(diff, plan, graph) {
     undocumented_surfaces: undocumentedSurfaces,
     ambiguous_matches: ambiguousMatches,
     high_burial_triggers: highBurialTriggers,
+    memory_excluded: 0,
   };
 }
 
@@ -229,6 +231,14 @@ export function generateVerifyReport(verdict, planEntries) {
     lines.push('');
   }
 
+  // Memory impact
+  if (verdict.metrics.memory_excluded > 0) {
+    lines.push('## Memory Impact');
+    lines.push('');
+    lines.push(`- ${verdict.metrics.memory_excluded} feature(s) excluded by memory exceptions`);
+    lines.push('');
+  }
+
   lines.push('---');
   lines.push('');
   lines.push('To reproduce: `ai-ui verify --verbose`');
@@ -262,7 +272,7 @@ function findThreshold(verdict, rule) {
 /**
  * Run the Verify command.
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ verbose?: boolean, runPipeline?: boolean, strict?: boolean, json?: boolean }} flags
+ * @param {{ verbose?: boolean, runPipeline?: boolean, strict?: boolean, json?: boolean, noMemory?: boolean, memoryStrict?: boolean }} flags
  */
 export async function runVerify(config, flags) {
   const cwd = process.cwd();
@@ -343,8 +353,14 @@ export async function runVerify(config, flags) {
     verifyConfig.failOnP0Orphans = true;
   }
 
-  // Extract → Apply → Verdict
-  const metrics = extractMetrics(diff, plan, graph);
+  // Load memory for exceptions
+  const memory = flags.noMemory ? null : loadMemory(resolve(cwd, config.memory.dir), flags.memoryStrict);
+
+  // Extract → Apply exceptions → Apply rules → Verdict
+  const rawMetrics = extractMetrics(diff, plan, graph);
+  const metrics = (memory && Object.keys(memory.exceptions).length > 0)
+    ? applyExceptions(rawMetrics, memory.exceptions, graph)
+    : rawMetrics;
   const { blockers, warnings } = applyRules(metrics, verifyConfig);
   const verdict = generateVerdict(metrics, blockers, warnings, artifactVersions);
 
@@ -372,6 +388,9 @@ export async function runVerify(config, flags) {
       console.log(`  Undocumented surfaces: ${metrics.undocumented_surfaces}`);
       console.log(`  Ambiguous matches: ${metrics.ambiguous_matches}`);
       console.log(`  High burial triggers: ${metrics.high_burial_triggers}`);
+      if (metrics.memory_excluded > 0) {
+        console.log(`  Memory excluded: ${metrics.memory_excluded} feature(s)`);
+      }
       console.log(`  Artifacts: ${Object.entries(artifactVersions).map(([k, v]) => `${k} ${v}`).join(', ')}`);
       if (blockers.length > 0) {
         console.log('  Blockers:');

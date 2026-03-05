@@ -10,11 +10,12 @@ import {
   detectAmbiguous,
   enrichDiscoverable,
 } from './diagnostics.mjs';
+import { loadMemory, mergeMemoryMappings, suggestMemoryEntries } from './memory.mjs';
 
 /**
  * Run the Diff command: atlas.json ↔ probe.jsonl (+ surfaces) → diff.json + diff.md.
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ verbose?: boolean }} flags
+ * @param {{ verbose?: boolean, noMemory?: boolean, memoryStrict?: boolean }} flags
  */
 export async function runDiff(config, flags) {
   const cwd = process.cwd();
@@ -55,12 +56,18 @@ export async function runDiff(config, flags) {
     }
   }
 
-  // Load manual mappings
-  const manualMapping = config.mapping || {};
+  // Load memory + merge mappings
+  const memory = flags.noMemory ? null : loadMemory(resolve(cwd, config.memory.dir), flags.memoryStrict);
+  const manualMapping = memory
+    ? mergeMemoryMappings(config.mapping || {}, memory.mappings)
+    : (config.mapping || {});
+
+  const memoryMappingCount = memory ? Object.keys(memory.mappings).length : 0;
 
   if (flags.verbose) {
     console.log(`Diff: ${features.length} features × ${triggers.length} triggers` +
-      (surfaces.length > 0 ? ` + ${surfaces.length} surfaces` : ''));
+      (surfaces.length > 0 ? ` + ${surfaces.length} surfaces` : '') +
+      (memoryMappingCount > 0 ? ` + ${memoryMappingCount} memory mapping(s)` : ''));
   }
 
   // --- Matching with full candidate collection ---
@@ -253,6 +260,12 @@ export async function runDiff(config, flags) {
     top_suggested_rules: topSuggestedRules,
   };
 
+  // --- Suggested memory entries ---
+  const suggested = suggestMemoryEntries({
+    ambiguous_matches: ambiguousMatches,
+    documented_not_discoverable: documentedNotDiscoverable,
+  });
+
   // --- Write diff.json ---
   const diffJson = {
     version: '1.1.0',
@@ -262,6 +275,7 @@ export async function runDiff(config, flags) {
     ambiguous_matches: ambiguousMatches,
     matched: matched.sort((a, b) => a.feature_id.localeCompare(b.feature_id)),
     burial_index: burialIndex,
+    suggested_memory: suggested.mappings.length > 0 ? suggested : undefined,
     stats,
   };
 
@@ -438,6 +452,35 @@ function generateReport(diff) {
     }
   }
   lines.push('');
+
+  // --- Suggested Memory Updates ---
+  const suggested = diff.suggested_memory;
+  if (suggested && suggested.mappings && suggested.mappings.length > 0) {
+    lines.push('---');
+    lines.push('');
+    lines.push('## Suggested Memory Updates');
+    lines.push('');
+
+    const ambigSuggestions = suggested.mappings.filter(m => m.source === 'ambiguous');
+    if (ambigSuggestions.length > 0) {
+      lines.push('### Mappings (from ambiguous matches)');
+      lines.push('');
+      for (const s of ambigSuggestions) {
+        lines.push(`- \`${s.feature_id}\` → "${s.trigger_label}" (confidence ${s.confidence.toFixed(2)}) — ${s.hint}`);
+      }
+      lines.push('');
+    }
+
+    const nearMissSuggestions = suggested.mappings.filter(m => m.source === 'near_miss');
+    if (nearMissSuggestions.length > 0) {
+      lines.push('### Mappings (from near-miss candidates)');
+      lines.push('');
+      for (const s of nearMissSuggestions) {
+        lines.push(`- \`${s.feature_id}\` ↔ "${s.trigger_label}" (score ${s.confidence.toFixed(2)}) — ${s.hint}`);
+      }
+      lines.push('');
+    }
+  }
 
   return lines.join('\n');
 }
