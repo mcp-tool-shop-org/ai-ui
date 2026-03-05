@@ -26,6 +26,9 @@ const DEFAULTS = {
     graph: 'ai-ui-output/trigger-graph.json',
     graphReport: 'ai-ui-output/trigger-graph.md',
     graphDot: 'ai-ui-output/trigger-graph.dot',
+    composePlan: 'ai-ui-output/surfacing-plan.json',
+    composeReport: 'ai-ui-output/surfacing-plan.md',
+    composeDot: 'ai-ui-output/surfacing-plan.dot',
   },
 };
 

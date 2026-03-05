@@ -15,6 +15,7 @@
     "surfaces": "node cli/bin/ai-ui.mjs surfaces",
     "diff": "node cli/bin/ai-ui.mjs diff",
     "graph": "node cli/bin/ai-ui.mjs graph",
+    "compose": "node cli/bin/ai-ui.mjs compose",
     "stage0": "node cli/bin/ai-ui.mjs stage0",
     "test": "node --test cli/test/**/*.test.mjs"
   },

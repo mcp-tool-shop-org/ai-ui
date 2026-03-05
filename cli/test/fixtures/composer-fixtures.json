@@ -1,0 +1,213 @@
+{
+  "features": [
+    {
+      "id": "color-roles",
+      "name": "Color roles",
+      "synonyms": [],
+      "sources": [{ "file": "README.md", "line": 60, "type": "bullet", "section": "Design Tokens" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "type-scale",
+      "name": "Type scale",
+      "synonyms": ["typography"],
+      "sources": [{ "file": "README.md", "line": 59, "type": "bullet", "section": "Design Tokens" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "composable-sections",
+      "name": "Composable sections. Hero, features, CTA",
+      "synonyms": ["layout"],
+      "sources": [{ "file": "README.md", "line": 68, "type": "bullet", "section": "Architecture" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "get-started",
+      "name": "Get started",
+      "synonyms": ["onboarding", "begin"],
+      "sources": [{ "file": "README.md", "line": 5, "type": "heading", "section": "Intro" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "manage-items",
+      "name": "Manage items",
+      "synonyms": ["list items"],
+      "sources": [{ "file": "README.md", "line": 40, "type": "bullet", "section": "Features" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "delete-account",
+      "name": "Delete account",
+      "synonyms": ["remove account"],
+      "sources": [{ "file": "README.md", "line": 45, "type": "bullet", "section": "Settings" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "dark-theme",
+      "name": "Dark theme",
+      "synonyms": ["dark mode"],
+      "sources": [{ "file": "README.md", "line": 61, "type": "bullet", "section": "Design Tokens" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "view-docs",
+      "name": "View docs",
+      "synonyms": ["documentation"],
+      "sources": [{ "file": "README.md", "line": 15, "type": "bullet", "section": "Features" }],
+      "expected_entrypoints": []
+    }
+  ],
+  "diff": {
+    "version": "1.1.0",
+    "matched": [],
+    "documented_not_discoverable": [
+      {
+        "feature_id": "color-roles",
+        "feature_name": "Color roles",
+        "sources": ["README.md:60"],
+        "failure_reason": "missing_surface"
+      },
+      {
+        "feature_id": "type-scale",
+        "feature_name": "Type scale",
+        "sources": ["README.md:59"],
+        "failure_reason": "missing_surface"
+      },
+      {
+        "feature_id": "composable-sections",
+        "feature_name": "Composable sections. Hero, features, CTA",
+        "sources": ["README.md:68"],
+        "failure_reason": "missing_surface"
+      },
+      {
+        "feature_id": "get-started",
+        "feature_name": "Get started",
+        "sources": ["README.md:5"],
+        "failure_reason": "missing_surface"
+      },
+      {
+        "feature_id": "manage-items",
+        "feature_name": "Manage items",
+        "sources": ["README.md:40"],
+        "failure_reason": "missing_surface"
+      },
+      {
+        "feature_id": "delete-account",
+        "feature_name": "Delete account",
+        "sources": ["README.md:45"],
+        "failure_reason": "missing_surface"
+      },
+      {
+        "feature_id": "dark-theme",
+        "feature_name": "Dark theme",
+        "sources": ["README.md:61"],
+        "failure_reason": "missing_surface"
+      },
+      {
+        "feature_id": "view-docs",
+        "feature_name": "View docs",
+        "sources": ["README.md:15"],
+        "failure_reason": "missing_surface"
+      }
+    ],
+    "discoverable_not_documented": [],
+    "ambiguous_matches": [],
+    "burial_index": [
+      { "trigger_label": "Docs", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Get started", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Settings", "route": "/", "depth": 0, "in_primary_nav": false, "behind_overflow": true, "burial_score": 5 }
+    ],
+    "stats": {}
+  },
+  "triggers": [
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "a",
+      "label": "Docs",
+      "href": "/docs",
+      "selector": "a.docs",
+      "depth": 0,
+      "parent_nav": true,
+      "timestamp": "2026-01-01T00:00:00Z"
+    },
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "a",
+      "label": "Get started",
+      "href": "/get-started",
+      "selector": "a.btn.primary",
+      "depth": 0,
+      "parent_nav": true,
+      "timestamp": "2026-01-01T00:00:00Z"
+    },
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "button",
+      "label": "Settings",
+      "href": null,
+      "selector": "button.settings",
+      "depth": 0,
+      "parent_nav": false,
+      "timestamp": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "routeChanges": [
+    { "type": "route_change", "from": "/", "to": "/docs", "trigger_label": "Docs" },
+    { "type": "route_change", "from": "/", "to": "/get-started", "trigger_label": "Get started" }
+  ],
+  "surfaces": [
+    {
+      "nodeId": "link-docs",
+      "route": "/",
+      "role": "LINK",
+      "label": "docs",
+      "pattern": null,
+      "styleTokens": [],
+      "handlers": [{ "event": "click", "intent": "navigate" }],
+      "state": []
+    },
+    {
+      "nodeId": "btn-get-started",
+      "route": "/",
+      "role": "BUTTON",
+      "label": "get-started",
+      "pattern": null,
+      "styleTokens": ["primary"],
+      "handlers": [{ "event": "click", "intent": "navigate" }],
+      "state": []
+    },
+    {
+      "nodeId": "hero-section",
+      "route": "/",
+      "role": "SECTION",
+      "label": "hero",
+      "pattern": "custom",
+      "styleTokens": [],
+      "handlers": [],
+      "state": []
+    },
+    {
+      "nodeId": "data-table-items",
+      "route": "/items",
+      "role": "TABLE",
+      "label": "items-table",
+      "pattern": "data_table",
+      "styleTokens": [],
+      "handlers": [{ "event": "click", "intent": "navigate" }],
+      "state": []
+    },
+    {
+      "nodeId": "nav-menu",
+      "route": "/",
+      "role": "NAV",
+      "label": "main-nav",
+      "pattern": "nav_menu",
+      "styleTokens": [],
+      "handlers": [],
+      "state": []
+    }
+  ]
+}

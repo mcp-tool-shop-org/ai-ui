@@ -5,7 +5,7 @@
  * @property {{ globs: string[], cliHelp: string|null }} docs
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string }} probe
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string }} output
  */
 
 /**
@@ -145,6 +145,45 @@
  * @property {number} effect_edges
  * @property {boolean} has_surface
  * @property {boolean} parent_nav
+ */
+
+// =============================================================================
+// Phase 3: Surfacing Composer types
+// =============================================================================
+
+/**
+ * @typedef {'navigate'|'submit'|'change'|'destructive'|'data'|'display'|'config'} IntentClass
+ */
+
+/**
+ * @typedef {Object} PlanEntry
+ * @property {string} feature_id
+ * @property {string} feature_name
+ * @property {'P0'|'P1'|'P2'} priority
+ * @property {IntentClass} intent_class
+ * @property {{ diff_reason: string, evidence: string[] }} why
+ * @property {{ rule: string, route: string, surface_id: string|null, pattern_slot: string }} placement
+ * @property {{ label: string, pattern_kind: string, style_tokens: string[], data_aiui: string }} control
+ * @property {{ event: string }} trigger
+ * @property {{ intent: string, target: string }} effect
+ * @property {string[]} acceptance_criteria
+ */
+
+/**
+ * @typedef {Object} SurfacingPlan
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {SurfacingPlanSummary} summary
+ * @property {PlanEntry[]} plans
+ */
+
+/**
+ * @typedef {Object} SurfacingPlanSummary
+ * @property {number} features_total
+ * @property {number} features_planned
+ * @property {string[]} routes_touched
+ * @property {Record<string, number>} placements_by_rule
+ * @property {Record<string, number>} placements_by_priority
  */
 
 export {};

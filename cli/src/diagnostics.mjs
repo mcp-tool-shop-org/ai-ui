@@ -93,17 +93,17 @@ const STYLE_AFFINITY = {
 // Suggestion heuristic keywords
 // =============================================================================
 
-const ONBOARDING_WORDS = new Set([
+export const ONBOARDING_WORDS = new Set([
   'start', 'begin', 'setup', 'onboard', 'welcome', 'try', 'demo', 'intro', 'get',
 ]);
 
-const ADVANCED_WORDS = new Set([
+export const ADVANCED_WORDS = new Set([
   'settings', 'preferences', 'configure', 'config', 'advanced', 'tokens',
   'options', 'admin', 'debug', 'export', 'import', 'api', 'webhook',
   'roles', 'permissions', 'scale', 'spacing', 'color', 'theme', 'dark',
 ]);
 
-const DATA_WORDS = new Set([
+export const DATA_WORDS = new Set([
   'list', 'table', 'view', 'manage', 'filter', 'sort', 'data', 'items',
   'records', 'entries', 'rows', 'columns',
 ]);

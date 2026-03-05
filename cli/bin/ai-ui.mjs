@@ -5,7 +5,7 @@ import { loadConfig, fail } from '../src/config.mjs';
 const VERSION = '1.0.0';
 
 const HELP = `
-ai-ui — Stage 0: Docs↔UI Diff + Trigger Graph
+ai-ui — Stage 0: Docs↔UI Diff + Trigger Graph + Surfacing Composer
 
 Usage:
   ai-ui <command> [options]
@@ -16,6 +16,7 @@ Commands:
   surfaces  Extract interactive surfaces from a WebSketch capture
   diff      Match atlas features against probe triggers (diff.json + diff.md)
   graph     Build trigger graph from probe + surfaces + diff (trigger-graph.json/.md/.dot)
+  compose   Generate surfacing plan from diff + graph (surfacing-plan.json/.md/.dot)
   stage0    Run atlas → probe → diff in sequence
 
 Options:
@@ -73,6 +74,11 @@ async function main() {
     case 'graph': {
       const { runGraph } = await import('../src/trigger-graph.mjs');
       await runGraph(config, flags);
+      break;
+    }
+    case 'compose': {
+      const { runCompose } = await import('../src/composer.mjs');
+      await runCompose(config, flags);
       break;
     }
     case 'stage0': {
