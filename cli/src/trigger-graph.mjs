@@ -548,7 +548,7 @@ export function generateDot(graph) {
  * Intent mapping: runtime effect kind → graph intent.
  * @type {Record<string, string[]>}
  */
-const RUNTIME_INTENT_MAP = {
+export const RUNTIME_INTENT_MAP = {
   'fetch:POST': ['submit', 'delete', 'change'],
   'fetch:PUT': ['submit', 'change'],
   'fetch:PATCH': ['change'],

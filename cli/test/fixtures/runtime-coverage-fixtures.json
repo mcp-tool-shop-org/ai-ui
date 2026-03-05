@@ -76,6 +76,96 @@
     { "type": "trigger", "route": "/", "element": "button", "label": "Delete", "href": null, "selector": ".delete", "depth": 0, "parent_nav": false }
   ],
 
+  "graphWithExpectedEffects": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "trigger:/|Submit", "type": "trigger", "label": "Submit", "route": "/", "meta": { "element": "button", "selector": ".submit", "parent_nav": false, "depth": 0 } },
+      { "id": "trigger:/|Refresh", "type": "trigger", "label": "Refresh", "route": "/", "meta": { "element": "button", "selector": ".refresh", "parent_nav": false, "depth": 0 } },
+      { "id": "trigger:/|Delete", "type": "trigger", "label": "Delete", "route": "/", "meta": { "element": "button", "selector": ".delete", "parent_nav": false, "depth": 0, "styleTokens": ["destructive"] } },
+      { "id": "trigger:/|Unprobed", "type": "trigger", "label": "Unprobed", "route": "/", "meta": { "element": "button", "selector": ".unprobed", "parent_nav": false, "depth": 0 } },
+      { "id": "surface:form-submit", "type": "surface", "label": "Submit", "route": "/", "meta": { "role": "BUTTON", "pattern": null, "styleTokens": ["primary"] } },
+      { "id": "surface:refresh-btn", "type": "surface", "label": "Refresh", "route": "/", "meta": { "role": "BUTTON", "pattern": null, "styleTokens": [] } },
+      { "id": "effect:submit:/", "type": "effect", "label": "submit", "meta": { "kind": "submit", "event": "click", "route": "/" } },
+      { "id": "effect:navigate:/dashboard", "type": "effect", "label": "navigate", "meta": { "kind": "navigate", "event": "click", "route": "/" } },
+      { "id": "effect:filter:/", "type": "effect", "label": "filter", "meta": { "kind": "filter", "event": "click", "route": "/" } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Submit", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Refresh", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Delete", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Unprobed", "type": "contains" },
+      { "from": "trigger:/|Submit", "to": "surface:form-submit", "type": "maps_to", "weight": 0.95 },
+      { "from": "trigger:/|Refresh", "to": "surface:refresh-btn", "type": "maps_to", "weight": 0.90 },
+      { "from": "surface:form-submit", "to": "effect:submit:/", "type": "produces" },
+      { "from": "surface:form-submit", "to": "effect:navigate:/dashboard", "type": "produces" },
+      { "from": "surface:refresh-btn", "to": "effect:filter:/", "type": "produces" }
+    ],
+    "stats": { "total_nodes": 10, "by_type": { "trigger": 4, "surface": 2, "effect": 3, "route": 1, "feature": 0 }, "total_edges": 9, "by_edge_type": { "maps_to": 2, "produces": 3, "writes": 0, "navigates_to": 0, "contains": 4, "documents": 0 }, "orphan_features": 0, "orphan_triggers": 2 }
+  },
+
+  "runtimeMissingExpected": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T01:00:00.000Z",
+    "url": "http://localhost:4321",
+    "triggers": [
+      {
+        "trigger_id": "click@submit",
+        "route": "/",
+        "label": "Submit",
+        "effects": [
+          { "kind": "fetch", "trigger_id": "click@submit", "route": "/", "window_ms": 100, "method": "POST", "url": "/api/submit", "status": 200 }
+        ]
+      },
+      {
+        "trigger_id": "click@refresh",
+        "route": "/",
+        "label": "Refresh",
+        "effects": [
+          { "kind": "fetch", "trigger_id": "click@refresh", "route": "/", "window_ms": 80, "method": "GET", "url": "/api/data?_t=123", "status": 200 }
+        ]
+      },
+      {
+        "trigger_id": "click@unknown",
+        "route": "/",
+        "label": "Unknown Widget",
+        "effects": [
+          { "kind": "domEffect", "trigger_id": "click@unknown", "route": "/", "window_ms": 30, "detail": "toast" }
+        ]
+      }
+    ],
+    "stats": { "total_triggers": 3, "triggers_fired": 3, "triggers_skipped": 0, "effects_captured": 3, "by_kind": { "fetch": 2, "domEffect": 1 } }
+  },
+
+  "probeMissingExpected": [
+    { "type": "meta", "url": "http://localhost:4321", "started_at": "2026-01-01T00:00:00.000Z", "routes": ["/"] },
+    { "type": "trigger", "route": "/", "element": "button", "label": "Submit", "href": null, "selector": ".submit", "depth": 0, "parent_nav": false },
+    { "type": "trigger", "route": "/", "element": "button", "label": "Refresh", "href": null, "selector": ".refresh", "depth": 0, "parent_nav": false }
+  ],
+
+  "graphWithLowAttribution": {
+    "version": "1.1.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "trigger:/|Submit", "type": "trigger", "label": "Submit", "route": "/", "meta": { "element": "button", "selector": ".submit", "parent_nav": false, "depth": 0 } },
+      { "id": "effect:domEffect:dom_change", "type": "effect", "label": "dom_change", "meta": { "kind": "domEffect", "observed": true, "confidence": "low", "evidence": [{ "key": "domEffect:dom_change", "kind": "domEffect" }] } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Submit", "type": "contains" },
+      { "from": "trigger:/|Submit", "to": "effect:domEffect:dom_change", "type": "runtime_observed" }
+    ],
+    "stats": { "total_nodes": 3, "by_type": { "trigger": 1, "surface": 0, "effect": 1, "route": 1, "feature": 0 }, "total_edges": 2, "by_edge_type": { "maps_to": 0, "produces": 0, "writes": 0, "navigates_to": 0, "contains": 1, "documents": 0, "runtime_observed": 1 }, "orphan_features": 0, "orphan_triggers": 1 }
+  },
+
+  "safeConfig": {
+    "denyLabelRegex": "delete|remove|destroy|reset|logout|revoke|disable|unsubscribe|billing",
+    "requireSafeAttrForDestructive": true,
+    "denyHrefRegex": null,
+    "denyMethodPatterns": []
+  },
+
   "emptyGraph": {
     "version": "1.0.0",
     "generated_at": "2026-01-01T00:00:00.000Z",

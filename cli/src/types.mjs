@@ -508,6 +508,59 @@
  * @property {TriggerCoverage[]} triggers
  * @property {CoverageSummary} summary
  * @property {SurpriseEntry[]} surprises
+ * @property {SurpriseEntryV2[]} [surprises_v2]
+ */
+
+// =============================================================================
+// Phase 7: Actionable Coverage types
+// =============================================================================
+
+/** @typedef {'new_effect'|'missing_expected'|'identity_drift'|'low_attribution'|'risky_skipped'} SurpriseCategory */
+
+/**
+ * @typedef {Object} SurpriseEntryV2
+ * @property {string} trigger_id
+ * @property {string} label
+ * @property {string} route
+ * @property {SurpriseCategory} category
+ * @property {string} [effect_id]
+ * @property {string} [expected_id]
+ * @property {string} [observed_id]
+ * @property {string} detail
+ */
+
+/** @typedef {'probe_trigger'|'investigate_missing'|'review_new_effect'|'resolve_drift'|'increase_confidence'} ActionType */
+
+/**
+ * @typedef {Object} CoverageAction
+ * @property {string} actionId
+ * @property {ActionType} type
+ * @property {number} priority
+ * @property {number} impact
+ * @property {'safe'|'caution'|'unsafe'} risk
+ * @property {'low'|'med'|'high'} effort
+ * @property {string} rationale
+ * @property {string} [triggerId]
+ * @property {string} [effectId]
+ */
+
+/**
+ * @typedef {Object} NextBestProbe
+ * @property {string} trigger_id
+ * @property {string} label
+ * @property {string} route
+ * @property {number} score
+ * @property {string[]} reasons
+ * @property {'safe'|'caution'|'unsafe'} risk
+ */
+
+/**
+ * @typedef {Object} ActionableReport
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {CoverageAction[]} actions
+ * @property {NextBestProbe[]} next_best_probes
+ * @property {{ total_actions: number, by_type: Record<string, number>, estimated_coverage_gain: number }} summary
  */
 
 /**
