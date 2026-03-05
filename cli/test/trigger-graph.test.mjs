@@ -11,6 +11,7 @@ import {
   findOrphanTriggers,
   generateGraphReport,
   generateDot,
+  augmentWithRuntime,
 } from '../src/trigger-graph.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -461,5 +462,412 @@ describe('edge cases', () => {
     );
     const triggerNodes = graph.nodes.filter(n => n.type === 'trigger');
     assert.equal(triggerNodes.length, 1);
+  });
+});
+
+// =============================================================================
+// augmentWithRuntime
+// =============================================================================
+
+describe('augmentWithRuntime', () => {
+  /** @type {import('../src/trigger-graph.mjs').TriggerGraph} */
+  let baseGraph;
+
+  /** @type {import('../src/types.mjs').RuntimeEffectsSummary} */
+  const runtimeSummary = {
+    version: '1.0.0',
+    generated_at: '2026-01-01T00:00:00.000Z',
+    url: 'http://localhost:4321',
+    triggers: [
+      {
+        trigger_id: 'click@get-started',
+        route: '/',
+        label: 'Get started',
+        effects: [
+          { kind: 'fetch', trigger_id: 'click@get-started', route: '/', window_ms: 150, method: 'POST', url: '/api/checkout', status: 302 },
+          { kind: 'navigate', trigger_id: 'click@get-started', route: '/', window_ms: 200, from: '/', to: '/pricing' },
+        ],
+      },
+      {
+        trigger_id: 'click@theme-toggle',
+        route: '/',
+        label: 'Theme',
+        effects: [
+          { kind: 'storageWrite', trigger_id: 'click@theme-toggle', route: '/', window_ms: 50, scope: 'local', key: 'theme' },
+        ],
+      },
+      {
+        trigger_id: 'click@export',
+        route: '/',
+        label: 'Export',
+        effects: [
+          { kind: 'download', trigger_id: 'click@export', route: '/', window_ms: 500, filename: 'report.csv' },
+        ],
+      },
+      {
+        trigger_id: 'click@save',
+        route: '/',
+        label: 'Save',
+        effects: [
+          { kind: 'domEffect', trigger_id: 'click@save', route: '/', window_ms: 300, detail: 'modal_open' },
+        ],
+      },
+    ],
+    stats: { total_triggers: 4, triggers_fired: 4, triggers_skipped: 0, effects_captured: 5, by_kind: { fetch: 1, navigate: 1, storageWrite: 1, download: 1, domEffect: 1 } },
+  };
+
+  // Build a minimal graph that has some triggers + effects
+  function buildTestGraph() {
+    return buildGraph(
+      [
+        { type: 'trigger', route: '/', element: 'button', label: 'Get started', href: null, selector: 'button', depth: 0, parent_nav: false },
+        { type: 'trigger', route: '/', element: 'button', label: 'Theme', href: null, selector: 'button', depth: 0, parent_nav: false },
+        { type: 'trigger', route: '/', element: 'button', label: 'Export', href: null, selector: 'button', depth: 0, parent_nav: false },
+        { type: 'trigger', route: '/', element: 'button', label: 'Save', href: null, selector: 'button', depth: 0, parent_nav: false },
+      ],
+      [],
+      [
+        {
+          nodeId: 'surf-1', route: '/', role: 'BUTTON', label: 'Get started', pattern: null, styleTokens: [],
+          handlers: [{ event: 'click', intent: 'navigate' }], state: [],
+        },
+        {
+          nodeId: 'surf-theme', route: '/', role: 'BUTTON', label: 'Theme', pattern: null, styleTokens: [],
+          handlers: [], state: [{ key: 'theme', access: 'write' }],
+        },
+      ],
+      [],
+      { matched: [], burial_index: [] },
+    );
+  }
+
+  it('bumps version to 1.1.0', () => {
+    const graph = buildTestGraph();
+    assert.equal(graph.version, '1.0.0');
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.equal(augmented.version, '1.1.0');
+  });
+
+  it('does not mutate the original graph', () => {
+    const graph = buildTestGraph();
+    const originalNodeCount = graph.nodes.length;
+    augmentWithRuntime(graph, runtimeSummary);
+    assert.equal(graph.nodes.length, originalNodeCount);
+    assert.equal(graph.version, '1.0.0');
+  });
+
+  it('marks existing effect as observed when runtime matches', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const navEffect = augmented.nodes.find(n => n.id === 'effect:navigate:/');
+    assert.ok(navEffect);
+    assert.equal(navEffect.meta.observed, true);
+    assert.ok(Array.isArray(navEffect.meta.evidence));
+    assert.ok(navEffect.meta.evidence.length >= 1);
+  });
+
+  it('marks stateWrite effect as observed', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const stateNode = augmented.nodes.find(n => n.id === 'effect:stateWrite:theme');
+    assert.ok(stateNode);
+    assert.equal(stateNode.meta.observed, true);
+  });
+
+  it('creates new effect nodes for unmatched runtime effects', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+
+    // fetch POST /api/checkout is new (no existing submit effect)
+    const fetchNode = augmented.nodes.find(n => n.id === 'effect:fetch:POST /api/checkout');
+    assert.ok(fetchNode, 'fetch effect node should be created');
+    assert.equal(fetchNode.meta.observed, true);
+    assert.equal(fetchNode.type, 'effect');
+  });
+
+  it('creates download effect node', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const dlNode = augmented.nodes.find(n => n.id === 'effect:download:report.csv');
+    assert.ok(dlNode);
+    assert.equal(dlNode.label, 'download → report.csv');
+  });
+
+  it('creates domEffect node', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const domNode = augmented.nodes.find(n => n.id === 'effect:domEffect:modal_open');
+    assert.ok(domNode);
+    assert.equal(domNode.label, 'dom → modal_open');
+  });
+
+  it('adds runtime_observed edges from trigger to new effect', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const runtimeEdges = augmented.edges.filter(e => e.type === 'runtime_observed');
+    assert.ok(runtimeEdges.length >= 1);
+    // Check that an edge exists from Export trigger to download effect
+    const exportEdge = runtimeEdges.find(e =>
+      e.from === 'trigger:/|Export' && e.to === 'effect:download:report.csv'
+    );
+    assert.ok(exportEdge, 'runtime_observed edge from Export to download should exist');
+  });
+
+  it('includes runtime_observed in edge type stats', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.ok(augmented.stats.by_edge_type.runtime_observed >= 1);
+  });
+
+  it('updates effect count in stats', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.ok(augmented.stats.by_type.effect > graph.stats.by_type.effect);
+  });
+
+  it('nodes are sorted deterministically', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const ids = augmented.nodes.map(n => n.id);
+    const sorted = [...ids].sort();
+    assert.deepStrictEqual(ids, sorted);
+  });
+
+  it('edges are deduplicated', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const edgeKeys = augmented.edges.map(e => `${e.from}→${e.to}→${e.type}`);
+    const unique = new Set(edgeKeys);
+    assert.equal(edgeKeys.length, unique.size);
+  });
+
+  it('is deterministic across repeated calls', () => {
+    const graph = buildTestGraph();
+    const a1 = augmentWithRuntime(graph, runtimeSummary);
+    const a2 = augmentWithRuntime(graph, runtimeSummary);
+    assert.deepStrictEqual(a1, a2);
+  });
+
+  it('handles empty runtime summary (no changes → version stays 1.0.0)', () => {
+    const graph = buildTestGraph();
+    const emptySummary = { version: '1.0.0', generated_at: '2026-01-01T00:00:00.000Z', url: '', triggers: [], stats: { total_triggers: 0, triggers_fired: 0, triggers_skipped: 0, effects_captured: 0, by_kind: {} } };
+    const augmented = augmentWithRuntime(graph, emptySummary);
+    assert.equal(augmented.version, '1.0.0');
+    assert.equal(augmented.nodes.length, graph.nodes.length);
+  });
+
+  it('navigate effect matches existing navigate intent and marks observed', () => {
+    const graph = buildTestGraph();
+    const navOnlySummary = {
+      version: '1.0.0', generated_at: '2026-01-01T00:00:00.000Z', url: '', triggers: [
+        { trigger_id: 'click@nav', route: '/', label: 'Nav', effects: [
+          { kind: 'navigate', trigger_id: 'click@nav', route: '/', window_ms: 100, from: '/', to: '/about' },
+        ] },
+      ], stats: { total_triggers: 1, triggers_fired: 1, triggers_skipped: 0, effects_captured: 1, by_kind: { navigate: 1 } },
+    };
+    const augmented = augmentWithRuntime(graph, navOnlySummary);
+    // Existing effect:navigate:/ should be marked observed
+    const navNode = augmented.nodes.find(n => n.id === 'effect:navigate:/');
+    assert.ok(navNode);
+    assert.equal(navNode.meta.observed, true);
+    assert.ok(navNode.meta.evidence.length >= 1);
+    assert.equal(navNode.meta.evidence[0].kind, 'navigate');
+  });
+
+  it('navigate effect creates new node when no existing navigate intent', () => {
+    // Graph with no surfaces (no existing effect nodes)
+    const graph = buildGraph(
+      [{ type: 'trigger', route: '/', element: 'a', label: 'About', href: null, selector: 'a', depth: 0, parent_nav: false }],
+      [], [], [], { matched: [], burial_index: [] },
+    );
+    const navSummary = {
+      version: '1.0.0', generated_at: '2026-01-01T00:00:00.000Z', url: '', triggers: [
+        { trigger_id: 'click@about', route: '/', label: 'About', effects: [
+          { kind: 'navigate', trigger_id: 'click@about', route: '/', window_ms: 100, from: '/', to: '/about' },
+        ] },
+      ], stats: { total_triggers: 1, triggers_fired: 1, triggers_skipped: 0, effects_captured: 1, by_kind: { navigate: 1 } },
+    };
+    const augmented = augmentWithRuntime(graph, navSummary);
+    const navNode = augmented.nodes.find(n => n.id === 'effect:navigate:/about');
+    assert.ok(navNode);
+    assert.equal(navNode.label, 'navigate → /about');
+  });
+
+  // --- Phase 1: Evidence dedupe + confidence ---
+
+  it('evidence entries have key field', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const navNode = augmented.nodes.find(n => n.id === 'effect:navigate:/');
+    assert.ok(navNode.meta.evidence[0].key);
+    assert.equal(navNode.meta.evidence[0].key, 'navigate:/pricing');
+  });
+
+  it('deduplicates evidence entries with same key', () => {
+    const graph = buildTestGraph();
+    // Create a runtime summary with duplicate effects for same trigger
+    const dupSummary = {
+      ...runtimeSummary,
+      triggers: [{
+        trigger_id: 'click@get-started',
+        route: '/',
+        label: 'Get started',
+        effects: [
+          { kind: 'navigate', trigger_id: 'click@get-started', route: '/', window_ms: 200, from: '/', to: '/pricing' },
+          { kind: 'navigate', trigger_id: 'click@get-started', route: '/', window_ms: 250, from: '/', to: '/pricing' },
+        ],
+      }],
+    };
+    const augmented = augmentWithRuntime(graph, dupSummary);
+    const navNode = augmented.nodes.find(n => n.id === 'effect:navigate:/');
+    // Should be deduplicated to 1 entry
+    assert.equal(navNode.meta.evidence.length, 1);
+  });
+
+  it('sets confidence level on observed effect nodes', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const navNode = augmented.nodes.find(n => n.id === 'effect:navigate:/');
+    assert.ok(['low', 'med', 'high'].includes(navNode.meta.confidence));
+  });
+
+  it('sets lastObservedAt from runtime summary', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const navNode = augmented.nodes.find(n => n.id === 'effect:navigate:/');
+    assert.equal(navNode.meta.lastObservedAt, '2026-01-01T00:00:00.000Z');
+  });
+
+  it('sets observedCount matching evidence length', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const navNode = augmented.nodes.find(n => n.id === 'effect:navigate:/');
+    assert.equal(navNode.meta.observedCount, navNode.meta.evidence.length);
+  });
+
+  it('new effect nodes also get key, confidence, and counts', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    const dlNode = augmented.nodes.find(n => n.id === 'effect:download:report.csv');
+    assert.ok(dlNode);
+    assert.ok(dlNode.meta.evidence[0].key);
+    assert.equal(dlNode.meta.evidence[0].key, 'download:report.csv');
+    assert.ok(dlNode.meta.confidence);
+    assert.ok(dlNode.meta.lastObservedAt);
+    assert.equal(dlNode.meta.observedCount, 1);
+  });
+
+  // --- Phase 2: Normalized effect IDs ---
+
+  it('similar URLs with different IDs collapse to one effect node', () => {
+    const graph = buildGraph(
+      [{ type: 'trigger', route: '/', element: 'button', label: 'Load', href: null, selector: 'button', depth: 0, parent_nav: false }],
+      [], [], [], { matched: [], burial_index: [] },
+    );
+    const twoFetchSummary = {
+      version: '1.0.0', generated_at: '2026-01-01T00:00:00.000Z', url: '', triggers: [
+        { trigger_id: 'click@load', route: '/', label: 'Load', effects: [
+          { kind: 'fetch', trigger_id: 'click@load', route: '/', window_ms: 100, method: 'GET', url: '/api/users/42?_t=111', status: 200 },
+          { kind: 'fetch', trigger_id: 'click@load', route: '/', window_ms: 200, method: 'GET', url: '/api/users/99?_t=222', status: 200 },
+        ] },
+      ], stats: { total_triggers: 1, triggers_fired: 1, triggers_skipped: 0, effects_captured: 2, by_kind: { fetch: 2 } },
+    };
+    const augmented = augmentWithRuntime(graph, twoFetchSummary);
+    // Both should collapse to effect:fetch:GET /api/users/:id
+    const fetchNodes = augmented.nodes.filter(n => n.type === 'effect' && n.meta.kind === 'fetch');
+    assert.equal(fetchNodes.length, 1);
+    assert.equal(fetchNodes[0].id, 'effect:fetch:GET /api/users/:id');
+  });
+
+  it('normalized IDs are deterministic across runs', () => {
+    const graph = buildTestGraph();
+    const a1 = augmentWithRuntime(graph, runtimeSummary);
+    const a2 = augmentWithRuntime(graph, runtimeSummary);
+    const ids1 = a1.nodes.map(n => n.id);
+    const ids2 = a2.nodes.map(n => n.id);
+    assert.deepStrictEqual(ids1, ids2);
+  });
+
+  // --- Phase 5: graphDelta + version traceability ---
+
+  it('includes graphDelta on augmented graph', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.ok(augmented.graphDelta);
+    assert.equal(typeof augmented.graphDelta.nodesAdded, 'number');
+    assert.equal(typeof augmented.graphDelta.nodesUpdated, 'number');
+    assert.equal(typeof augmented.graphDelta.observedEffects, 'number');
+    assert.equal(typeof augmented.graphDelta.newEdges, 'number');
+    assert.equal(typeof augmented.graphDelta.reason, 'string');
+  });
+
+  it('graphDelta reports added nodes when runtime creates new effects', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    // runtimeSummary has download and domEffect that won't match existing nodes
+    assert.ok(augmented.graphDelta.nodesAdded > 0);
+  });
+
+  it('graphDelta reports updated nodes when runtime matches existing effects', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    // navigate effect should match existing node
+    assert.ok(augmented.graphDelta.nodesUpdated > 0 || augmented.graphDelta.observedEffects > 0);
+  });
+
+  it('graphDelta reports observed effects count', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.ok(augmented.graphDelta.observedEffects >= runtimeSummary.triggers[0].effects.length);
+  });
+
+  it('version is 1.1.0 when runtime changes are made', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.equal(augmented.version, '1.1.0');
+  });
+
+  it('version stays 1.0.0 when no runtime effects match', () => {
+    const graph = buildTestGraph();
+    const emptySummary = {
+      version: '1.0.0',
+      generated_at: '2026-01-01T00:00:00.000Z',
+      url: '',
+      triggers: [],
+      stats: { total_triggers: 0, triggers_fired: 0, triggers_skipped: 0, effects_captured: 0, by_kind: {} },
+    };
+    const augmented = augmentWithRuntime(graph, emptySummary);
+    assert.equal(augmented.version, '1.0.0');
+    assert.equal(augmented.graphDelta.nodesAdded, 0);
+    assert.equal(augmented.graphDelta.nodesUpdated, 0);
+  });
+
+  it('graphDelta reason describes changes when present', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.ok(augmented.graphDelta.reason.includes('augmented'));
+  });
+
+  it('graphDelta reason says no match when empty', () => {
+    const graph = buildTestGraph();
+    const emptySummary = {
+      version: '1.0.0', generated_at: '2026-01-01T00:00:00.000Z', url: '',
+      triggers: [], stats: { total_triggers: 0, triggers_fired: 0, triggers_skipped: 0, effects_captured: 0, by_kind: {} },
+    };
+    const augmented = augmentWithRuntime(graph, emptySummary);
+    assert.ok(augmented.graphDelta.reason.includes('no runtime effects'));
+  });
+
+  it('graphDelta tracks newEdges', () => {
+    const graph = buildTestGraph();
+    const augmented = augmentWithRuntime(graph, runtimeSummary);
+    assert.ok(augmented.graphDelta.newEdges >= 0);
+  });
+
+  it('graphDelta is deterministic across runs', () => {
+    const graph = buildTestGraph();
+    const a1 = augmentWithRuntime(graph, runtimeSummary);
+    const a2 = augmentWithRuntime(graph, runtimeSummary);
+    assert.deepStrictEqual(a1.graphDelta, a2.graphDelta);
   });
 });

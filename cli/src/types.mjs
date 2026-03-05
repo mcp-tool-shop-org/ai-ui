@@ -5,9 +5,11 @@
  * @property {{ globs: string[], cliHelp: string|null }} docs
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string }} probe
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string }} output
  * @property {VerifyConfig} verify
+ * @property {BaselineConfig} baseline
  * @property {MemoryConfig} memory
+ * @property {RuntimeEffectsConfig} runtimeEffects
  */
 
 /**
@@ -226,6 +228,7 @@
  * @property {number} ambiguous_matches
  * @property {number} high_burial_triggers
  * @property {number} memory_excluded     - Features excluded by memory exceptions
+ * @property {number} must_surface_violations - Required features that are orphaned
  */
 
 /**
@@ -238,6 +241,64 @@
  * @property {VerifyBlocker[]} blockers
  * @property {VerifyWarning[]} warnings
  * @property {Record<string, string>} artifact_versions
+ * @property {BaselineDelta[]} [baseline_deltas] - Delta comparison if baseline existed
+ * @property {string} [baseline_id]              - Baseline created_at timestamp
+ * @property {MustSurfaceResult[]} [must_surface_results] - Per-feature must-surface check results
+ */
+
+// =============================================================================
+// Phase 4B: Baseline types
+// =============================================================================
+
+/**
+ * @typedef {Object} BaselineConfig
+ * @property {boolean} failOnOrphanIncrease       - Fail if orphan_features > baseline
+ * @property {number} maxUndocumentedIncrease     - Fail if undocumented increased by > N
+ * @property {boolean} warnOnCoverageDecrease     - Warn if coverage_percent decreased
+ */
+
+/**
+ * @typedef {Object} BaselineSnapshot
+ * @property {string} version
+ * @property {string} created_at
+ * @property {VerifyMetrics} metrics
+ * @property {Record<string, string>} artifact_versions
+ * @property {string} memory_hash
+ * @property {string} verify_config_hash
+ */
+
+/**
+ * @typedef {Object} BaselineDelta
+ * @property {string} metric
+ * @property {number} baseline_value
+ * @property {number} current_value
+ * @property {number} change
+ * @property {'improved'|'regressed'|'unchanged'} direction
+ */
+
+// =============================================================================
+// Phase 4C: Must-Surface types
+// =============================================================================
+
+/**
+ * @typedef {Object} MustSurfaceConfig
+ * @property {string} version
+ * @property {MustSurfaceEntry[]} required
+ */
+
+/**
+ * @typedef {Object} MustSurfaceEntry
+ * @property {string} feature_id
+ * @property {'P0'|'P1'|'P2'} severity
+ * @property {string} [reason]
+ */
+
+/**
+ * @typedef {Object} MustSurfaceResult
+ * @property {string} feature_id
+ * @property {'P0'|'P1'|'P2'} severity
+ * @property {'ok'|'orphaned'|'missing'} status
+ * @property {string} [reason]
  */
 
 // =============================================================================
@@ -289,6 +350,189 @@
 /**
  * @typedef {Object} SuggestedMemory
  * @property {SuggestedMapping[]} mappings
+ */
+
+// =============================================================================
+// Phase 5A: PR Comment types
+// =============================================================================
+
+/**
+ * @typedef {Object} PrCommentConfig
+ * @property {number} maxFixes
+ * @property {number} maxBlockers
+ * @property {number} maxWarnings
+ * @property {'github'|'gitlab'|'markdown'} format
+ */
+
+/**
+ * @typedef {Object} PrCommentFix
+ * @property {string} feature_id
+ * @property {string} feature_name
+ * @property {'P0'|'P1'|'P2'} priority
+ * @property {string} pattern_kind
+ * @property {string} route
+ * @property {string} label
+ * @property {string[]} acceptance_criteria
+ */
+
+/**
+ * @typedef {Object} PrCommentMemorySuggestion
+ * @property {string} feature_id
+ * @property {string} feature_name
+ * @property {string} suggested_trigger
+ * @property {string} hint
+ */
+
+/**
+ * @typedef {Object} PrCommentModel
+ * @property {boolean} pass
+ * @property {number} exit_code
+ * @property {VerifyMetrics} metrics
+ * @property {VerifyBlocker[]} blockers
+ * @property {number} blockers_truncated
+ * @property {PrCommentFix[]} fixes
+ * @property {number} fixes_truncated
+ * @property {PrCommentMemorySuggestion[]} memory_suggestions
+ * @property {VerifyWarning[]} warnings
+ * @property {number} warnings_truncated
+ * @property {BaselineDelta[]} [baseline_deltas]
+ * @property {string} [baseline_id]
+ * @property {MustSurfaceResult[]} [must_surface_results]
+ */
+
+// =============================================================================
+// Runtime Effects types
+// =============================================================================
+
+/** @typedef {'fetch'|'navigate'|'download'|'storageWrite'|'domEffect'} RuntimeEffectKind */
+
+/** @typedef {'low'|'med'|'high'} ConfidenceLevel */
+
+/**
+ * @typedef {Object} EvidenceEntry
+ * @property {string} key              - Stable key: `${kind}:${normalizedTarget}`
+ * @property {RuntimeEffectKind} kind
+ * @property {string} [method]
+ * @property {string} [url]
+ * @property {number} [status]
+ * @property {string} [filename]
+ * @property {string} [detail]
+ * @property {string} [scope]
+ * @property {string} [evidenceKey]    - storageWrite key (avoiding property name clash)
+ */
+
+/**
+ * @typedef {Object} DomMutationSummary
+ * @property {number} nodesAdded
+ * @property {number} nodesRemoved
+ * @property {number} attributesChanged
+ * @property {number} textChanged
+ */
+
+/**
+ * @typedef {Object} RuntimeEffect
+ * @property {RuntimeEffectKind} kind
+ * @property {string} trigger_id
+ * @property {string} route
+ * @property {number} window_ms
+ * @property {string} [method]     - fetch only
+ * @property {string} [url]        - fetch only
+ * @property {number} [status]     - fetch only
+ * @property {string} [from]       - navigate only
+ * @property {string} [to]         - navigate only
+ * @property {string} [filename]   - download only
+ * @property {string} [scope]      - storageWrite only (local|session)
+ * @property {string} [key]        - storageWrite only
+ * @property {string} [detail]     - domEffect only (modal_open|toast|clipboard_write)
+ * @property {DomMutationSummary} [domMutation] - domEffect only
+ * @property {string[]} [initiatorChain] - fetch only — redirect chain
+ */
+
+/**
+ * @typedef {Object} RuntimeTriggerSummary
+ * @property {string} trigger_id
+ * @property {string} route
+ * @property {string} label
+ * @property {RuntimeEffect[]} effects
+ */
+
+/**
+ * @typedef {Object} RuntimeEffectsSummary
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {string} url
+ * @property {RuntimeTriggerSummary[]} triggers
+ * @property {{ total_triggers: number, triggers_fired: number, triggers_skipped: number, effects_captured: number, by_kind: Record<string, number> }} stats
+ */
+
+// =============================================================================
+// Runtime Coverage Report types
+// =============================================================================
+
+/** @typedef {'fully_covered'|'partial'|'untested'|'surprise'} CoverageStatus */
+
+/**
+ * @typedef {Object} TriggerCoverage
+ * @property {string} trigger_id
+ * @property {string} route
+ * @property {string} label
+ * @property {boolean} probed
+ * @property {boolean} hasSurface
+ * @property {boolean} observed
+ * @property {CoverageStatus} status
+ * @property {string[]} effects
+ */
+
+/**
+ * @typedef {Object} CoverageSummary
+ * @property {number} total
+ * @property {number} fully_covered
+ * @property {number} partial
+ * @property {number} untested
+ * @property {number} surprise
+ * @property {number} coverage_percent
+ */
+
+/**
+ * @typedef {Object} SurpriseEntry
+ * @property {string} trigger_id
+ * @property {string} label
+ * @property {string} route
+ * @property {string} reason
+ */
+
+/**
+ * @typedef {Object} CoverageReport
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {TriggerCoverage[]} triggers
+ * @property {CoverageSummary} summary
+ * @property {SurpriseEntry[]} surprises
+ */
+
+/**
+ * @typedef {Object} GraphDelta
+ * @property {number} nodesAdded
+ * @property {number} nodesUpdated
+ * @property {number} observedEffects
+ * @property {number} newEdges
+ * @property {string} reason
+ */
+
+/**
+ * @typedef {Object} RuntimeEffectsSafeConfig
+ * @property {string} denyLabelRegex
+ * @property {boolean} requireSafeAttrForDestructive
+ * @property {string|null} [denyHrefRegex]
+ * @property {{ method: string, urlPattern: string }[]} [denyMethodPatterns]
+ */
+
+/**
+ * @typedef {Object} RuntimeEffectsConfig
+ * @property {string[]} routes
+ * @property {number} maxTriggersPerRoute
+ * @property {number} windowMs
+ * @property {RuntimeEffectsSafeConfig} safe
  */
 
 export {};

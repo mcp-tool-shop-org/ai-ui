@@ -1,0 +1,72 @@
+{
+  "graph_with_docs": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-05T00:00:00.000Z",
+    "nodes": [
+      { "id": "feature:color-roles", "type": "feature", "label": "Color roles", "meta": {} },
+      { "id": "feature:fast-iteration", "type": "feature", "label": "Fast iteration", "meta": {} },
+      { "id": "feature:type-scale", "type": "feature", "label": "Type scale", "meta": {} },
+      { "id": "trigger:colors", "type": "trigger", "label": "Colors", "route": "/", "meta": {} }
+    ],
+    "edges": [
+      { "from": "trigger:colors", "to": "feature:color-roles", "type": "documents", "weight": 0.85 }
+    ],
+    "stats": {
+      "total_nodes": 4,
+      "by_type": { "feature": 3, "trigger": 1 },
+      "total_edges": 1,
+      "by_edge_type": { "documents": 1 },
+      "orphan_features": 2,
+      "orphan_triggers": 0
+    }
+  },
+  "graph_all_orphans": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-05T00:00:00.000Z",
+    "nodes": [
+      { "id": "feature:color-roles", "type": "feature", "label": "Color roles", "meta": {} },
+      { "id": "feature:fast-iteration", "type": "feature", "label": "Fast iteration", "meta": {} }
+    ],
+    "edges": [],
+    "stats": {
+      "total_nodes": 2,
+      "by_type": { "feature": 2 },
+      "total_edges": 0,
+      "by_edge_type": {},
+      "orphan_features": 2,
+      "orphan_triggers": 0
+    }
+  },
+  "mustSurface_p0_p1": {
+    "version": "1.0.0",
+    "required": [
+      { "feature_id": "color-roles", "severity": "P0", "reason": "Core differentiator" },
+      { "feature_id": "fast-iteration", "severity": "P1", "reason": "Key selling point" }
+    ]
+  },
+  "mustSurface_p2_only": {
+    "version": "1.0.0",
+    "required": [
+      { "feature_id": "fast-iteration", "severity": "P2", "reason": "Nice to have" }
+    ]
+  },
+  "mustSurface_missing": {
+    "version": "1.0.0",
+    "required": [
+      { "feature_id": "nonexistent-feature", "severity": "P0", "reason": "Feature was removed" }
+    ]
+  },
+  "mustSurface_mixed": {
+    "version": "1.0.0",
+    "required": [
+      { "feature_id": "color-roles", "severity": "P0", "reason": "Documented feature" },
+      { "feature_id": "fast-iteration", "severity": "P1", "reason": "Orphaned P1" },
+      { "feature_id": "type-scale", "severity": "P2", "reason": "Orphaned P2" },
+      { "feature_id": "nonexistent", "severity": "P0", "reason": "Missing feature" }
+    ]
+  },
+  "mustSurface_empty": {
+    "version": "1.0.0",
+    "required": []
+  }
+}

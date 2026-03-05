@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import { fail } from './config.mjs';
 import { loadMemory, applyExceptions } from './memory.mjs';
+import { compareBaseline, applyBaselineRules, computeMemoryHash, computeConfigHash } from './baseline.mjs';
+import { loadMustSurface, checkMustSurface } from './must-surface.mjs';
 
 // =============================================================================
 // Metric extraction — pure function
@@ -48,6 +50,7 @@ export function extractMetrics(diff, plan, graph) {
     ambiguous_matches: ambiguousMatches,
     high_burial_triggers: highBurialTriggers,
     memory_excluded: 0,
+    must_surface_violations: 0,
   };
 }
 
@@ -239,12 +242,66 @@ export function generateVerifyReport(verdict, planEntries) {
     lines.push('');
   }
 
+  // Baseline comparison
+  if (verdict.baseline_deltas && verdict.baseline_deltas.length > 0) {
+    lines.push('## Baseline Comparison');
+    lines.push('');
+    lines.push(`Baseline from: ${verdict.baseline_id}`);
+    lines.push('');
+    lines.push('| Metric | Baseline | Current | Change | Status |');
+    lines.push('|--------|----------|---------|--------|--------|');
+    for (const d of verdict.baseline_deltas) {
+      const sign = d.change > 0 ? '+' : '';
+      const changeStr = d.metric === 'orphan_ratio'
+        ? `${sign}${(d.change * 100).toFixed(0)}%`
+        : d.metric === 'coverage_percent'
+          ? `${sign}${d.change}%`
+          : `${sign}${d.change}`;
+      const baseStr = d.metric === 'orphan_ratio'
+        ? `${(d.baseline_value * 100).toFixed(0)}%`
+        : d.metric === 'coverage_percent'
+          ? `${d.baseline_value}%`
+          : String(d.baseline_value);
+      const currStr = d.metric === 'orphan_ratio'
+        ? `${(d.current_value * 100).toFixed(0)}%`
+        : d.metric === 'coverage_percent'
+          ? `${d.current_value}%`
+          : String(d.current_value);
+      lines.push(`| ${formatMetricName(d.metric)} | ${baseStr} | ${currStr} | ${changeStr} | ${d.direction} |`);
+    }
+    lines.push('');
+  }
+
+  // Must-surface contract
+  if (verdict.must_surface_results && verdict.must_surface_results.length > 0) {
+    lines.push('## Must-Surface Contract');
+    lines.push('');
+    lines.push('| Feature | Severity | Status |');
+    lines.push('|---------|----------|--------|');
+    for (const r of verdict.must_surface_results) {
+      const statusLabel = r.status === 'ok' ? 'OK (documented)'
+        : r.status === 'orphaned' ? 'FAIL (orphaned)'
+        : 'WARN (missing)';
+      lines.push(`| ${r.feature_id} | ${r.severity} | ${statusLabel} |`);
+    }
+    lines.push('');
+  }
+
   lines.push('---');
   lines.push('');
   lines.push('To reproduce: `ai-ui verify --verbose`');
   lines.push('');
 
   return lines.join('\n');
+}
+
+/**
+ * Format a metric key for human-readable display.
+ * @param {string} metric
+ * @returns {string}
+ */
+function formatMetricName(metric) {
+  return metric.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 /**
@@ -272,7 +329,7 @@ function findThreshold(verdict, rule) {
 /**
  * Run the Verify command.
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ verbose?: boolean, runPipeline?: boolean, strict?: boolean, json?: boolean, noMemory?: boolean, memoryStrict?: boolean }} flags
+ * @param {{ verbose?: boolean, runPipeline?: boolean, strict?: boolean, json?: boolean, noMemory?: boolean, memoryStrict?: boolean, noMustSurface?: boolean }} flags
  */
 export async function runVerify(config, flags) {
   const cwd = process.cwd();
@@ -362,7 +419,56 @@ export async function runVerify(config, flags) {
     ? applyExceptions(rawMetrics, memory.exceptions, graph)
     : rawMetrics;
   const { blockers, warnings } = applyRules(metrics, verifyConfig);
+
+  // Baseline comparison (if baseline exists)
+  let baselineDeltas = null;
+  let baselineId = null;
+  const baselinePath = resolve(cwd, config.output.baseline);
+  if (existsSync(baselinePath)) {
+    try {
+      const baseline = JSON.parse(readFileSync(baselinePath, 'utf-8'));
+      if (baseline.metrics) {
+        const deltas = compareBaseline(baseline, metrics);
+        const memHash = computeMemoryHash(resolve(cwd, config.memory.dir));
+        const cfgHash = computeConfigHash(verifyConfig);
+        const baselineResults = applyBaselineRules(deltas, config.baseline, baseline, memHash, cfgHash);
+        blockers.push(...baselineResults.blockers);
+        warnings.push(...baselineResults.warnings);
+        blockers.sort((a, b) => a.rule.localeCompare(b.rule));
+        warnings.sort((a, b) => a.rule.localeCompare(b.rule));
+        baselineDeltas = deltas;
+        baselineId = baseline.created_at;
+      }
+    } catch (e) {
+      warnings.push({ rule: 'baseline_parse', message: `Failed to parse baseline: ${e.message}` });
+      warnings.sort((a, b) => a.rule.localeCompare(b.rule));
+    }
+  }
+
+  // Must-surface contract (if must-surface.json exists)
+  let mustSurfaceResults = null;
+  if (!flags.noMustSurface) {
+    const mustSurfacePath = resolve(cwd, config.output.mustSurface);
+    const mustSurfaceConfig = loadMustSurface(mustSurfacePath);
+    if (mustSurfaceConfig) {
+      const msResults = checkMustSurface(mustSurfaceConfig, graph);
+      blockers.push(...msResults.blockers);
+      warnings.push(...msResults.warnings);
+      blockers.sort((a, b) => a.rule.localeCompare(b.rule));
+      warnings.sort((a, b) => a.rule.localeCompare(b.rule));
+      mustSurfaceResults = msResults.results;
+      metrics.must_surface_violations = msResults.results.filter(r => r.status === 'orphaned').length;
+    }
+  }
+
   const verdict = generateVerdict(metrics, blockers, warnings, artifactVersions);
+  if (baselineDeltas) {
+    verdict.baseline_deltas = baselineDeltas;
+    verdict.baseline_id = baselineId;
+  }
+  if (mustSurfaceResults) {
+    verdict.must_surface_results = mustSurfaceResults;
+  }
 
   // Output
   if (flags.json) {
@@ -399,6 +505,22 @@ export async function runVerify(config, flags) {
       if (warnings.length > 0) {
         console.log('  Warnings:');
         for (const w of warnings) console.log(`    - [${w.rule}] ${w.message}`);
+      }
+      if (baselineDeltas) {
+        console.log(`  Baseline: ${baselineId}`);
+        for (const d of baselineDeltas) {
+          if (d.direction !== 'unchanged') {
+            const sign = d.change > 0 ? '+' : '';
+            console.log(`    ${d.metric}: ${d.baseline_value} → ${d.current_value} (${sign}${d.change}) ${d.direction}`);
+          }
+        }
+      }
+      if (mustSurfaceResults) {
+        const violations = mustSurfaceResults.filter(r => r.status !== 'ok');
+        console.log(`  Must-surface: ${mustSurfaceResults.length} required, ${violations.length} violation(s)`);
+        for (const r of violations) {
+          console.log(`    [${r.severity}] ${r.feature_id}: ${r.status}`);
+        }
       }
     }
   }

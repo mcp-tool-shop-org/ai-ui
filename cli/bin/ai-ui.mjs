@@ -18,7 +18,11 @@ Commands:
   graph        Build trigger graph from probe + surfaces + diff (trigger-graph.json/.md/.dot)
   compose      Generate surfacing plan from diff + graph (surfacing-plan.json/.md/.dot)
   verify       Judge pipeline artifacts and produce pass/fail verdict (verification.json/.md)
+  baseline     Manage verification baselines (--write to save, default: show)
+  pr-comment   Generate a PR-ready markdown comment from pipeline artifacts
   init-memory  Create empty memory files (mappings/decisions/exceptions)
+  runtime-effects  Click triggers and capture observed effects (runtime-effects.jsonl)
+  runtime-coverage Per-trigger coverage matrix (probed/surface/observed)
   stage0       Run atlas → probe → diff in sequence
 
 Options:
@@ -29,7 +33,17 @@ Options:
   --run-pipeline    (verify) Run full pipeline before judging
   --strict          (verify) Zero-tolerance thresholds
   --json            (verify) Print verdict JSON to stdout, no file writes
+  --write           (baseline) Save current verification as the new baseline
+  --force           (baseline) Overwrite existing baseline without warning
   --no-memory       Disable memory loading for this run
+  --no-must-surface Skip must-surface contract checks (verify)
+  --format <fmt>    (pr-comment) Output format: github|gitlab|markdown (default: github)
+  --max-fixes <n>   (pr-comment) Max fixes to show (default: 5)
+  --max-blockers <n> (pr-comment) Max blockers to show (default: 10)
+  --max-warnings <n> (pr-comment) Max warnings to show (default: 10)
+  --url <url>       (runtime-effects) Override base URL
+  --dry-run         (runtime-effects) Hover instead of click, tag entries as dry_run
+  --with-runtime    (graph) Augment graph with runtime-effects data
   --memory-strict   Fail if memory files don't parse
   --help            Show this help
   --version         Show version
@@ -93,9 +107,29 @@ async function main() {
       await runVerify(config, flags);
       break;
     }
+    case 'baseline': {
+      const { runBaseline } = await import('../src/baseline.mjs');
+      await runBaseline(config, flags);
+      break;
+    }
+    case 'pr-comment': {
+      const { runPrComment } = await import('../src/pr-comment.mjs');
+      await runPrComment(config, flags);
+      break;
+    }
     case 'init-memory': {
       const { runInitMemory } = await import('../src/memory.mjs');
       runInitMemory(config);
+      break;
+    }
+    case 'runtime-effects': {
+      const { runRuntimeEffects } = await import('../src/runtime-effects.mjs');
+      await runRuntimeEffects(config, flags);
+      break;
+    }
+    case 'runtime-coverage': {
+      const { runRuntimeCoverage } = await import('../src/runtime-coverage.mjs');
+      await runRuntimeCoverage(config, flags);
       break;
     }
     case 'stage0': {
@@ -111,10 +145,10 @@ async function main() {
 /**
  * Parse CLI flags from args.
  * @param {string[]} args
- * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean, runPipeline: boolean, strict: boolean, json: boolean, noMemory: boolean, memoryStrict: boolean }}
+ * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean, runPipeline: boolean, strict: boolean, json: boolean, write: boolean, force: boolean, noMemory: boolean, memoryStrict: boolean }}
  */
 function parseFlags(args) {
-  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, noMemory: false, memoryStrict: false };
+  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--config' && args[i + 1]) {
@@ -135,10 +169,30 @@ function parseFlags(args) {
       flags.strict = true;
     } else if (a === '--json') {
       flags.json = true;
+    } else if (a === '--write') {
+      flags.write = true;
+    } else if (a === '--force') {
+      flags.force = true;
     } else if (a === '--no-memory') {
       flags.noMemory = true;
+    } else if (a === '--no-must-surface') {
+      flags.noMustSurface = true;
+    } else if (a === '--format' && args[i + 1]) {
+      flags.format = args[++i];
+    } else if (a === '--max-fixes' && args[i + 1]) {
+      flags.maxFixes = parseInt(args[++i], 10);
+    } else if (a === '--max-blockers' && args[i + 1]) {
+      flags.maxBlockers = parseInt(args[++i], 10);
+    } else if (a === '--max-warnings' && args[i + 1]) {
+      flags.maxWarnings = parseInt(args[++i], 10);
     } else if (a === '--memory-strict') {
       flags.memoryStrict = true;
+    } else if (a === '--url' && args[i + 1]) {
+      flags.url = args[++i];
+    } else if (a === '--with-runtime') {
+      flags.withRuntime = true;
+    } else if (a === '--dry-run') {
+      flags.dryRun = true;
     }
   }
   return flags;

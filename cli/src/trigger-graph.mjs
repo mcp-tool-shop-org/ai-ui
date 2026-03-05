@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import { fail } from './config.mjs';
 import { matchScore } from './normalize.mjs';
+import { buildEvidenceKey, deduplicateEvidence, computeConfidence, normalizeEffectId } from './runtime-effects.mjs';
 
 // =============================================================================
 // Graph builder — pure function, no I/O
@@ -540,13 +541,245 @@ export function generateDot(graph) {
 }
 
 // =============================================================================
+// Runtime effects augmentation — pure function
+// =============================================================================
+
+/**
+ * Intent mapping: runtime effect kind → graph intent.
+ * @type {Record<string, string[]>}
+ */
+const RUNTIME_INTENT_MAP = {
+  'fetch:POST': ['submit', 'delete', 'change'],
+  'fetch:PUT': ['submit', 'change'],
+  'fetch:PATCH': ['change'],
+  'fetch:DELETE': ['delete'],
+  'fetch:GET': ['search', 'filter', 'navigate'],
+  'navigate': ['navigate'],
+  'download': ['data'],
+  'storageWrite': ['stateWrite'],
+  'domEffect': [],
+};
+
+/**
+ * Augment a trigger graph with observed runtime effects.
+ * Returns a new graph (does not mutate the input).
+ * @param {import('./types.mjs').TriggerGraph} graph
+ * @param {import('./types.mjs').RuntimeEffectsSummary} runtimeSummary
+ * @returns {import('./types.mjs').TriggerGraph}
+ */
+export function augmentWithRuntime(graph, runtimeSummary) {
+  // Deep clone to avoid mutation
+  const nodes = graph.nodes.map(n => ({ ...n, meta: { ...n.meta } }));
+  const edges = graph.edges.map(e => ({ ...e, meta: e.meta ? { ...e.meta } : undefined }));
+
+  /** @type {Map<string, import('./types.mjs').GraphNode>} */
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  // Delta tracking
+  let nodesAdded = 0;
+  let nodesUpdated = 0;
+  let observedEffects = 0;
+  let newEdges = 0;
+  const originalNodeCount = nodes.length;
+  const originalEdgeCount = edges.length;
+
+  for (const trigger of runtimeSummary.triggers) {
+    // Find matching trigger node in graph
+    const triggerNode = nodes.find(n =>
+      n.type === 'trigger' &&
+      n.route === trigger.route &&
+      (n.label === trigger.label || n.id === `trigger:${trigger.route}|${trigger.label}`)
+    );
+
+    for (const effect of trigger.effects) {
+      // Determine the intent key for matching
+      const intentKey = effect.kind === 'fetch'
+        ? `fetch:${effect.method || 'GET'}`
+        : effect.kind;
+      const matchableIntents = RUNTIME_INTENT_MAP[intentKey] || [];
+
+      // Try to find existing effect node that matches
+      let matched = false;
+      // Also try normalized ID as fallback
+      const normalizedId = normalizeEffectId(effect);
+      const candidateIds = [];
+      for (const intent of matchableIntents) {
+        const effectId = effect.kind === 'storageWrite'
+          ? `effect:stateWrite:${effect.key}`
+          : `effect:${intent}:${effect.route}`;
+        candidateIds.push(effectId);
+      }
+      // Add normalized ID as last fallback
+      if (!candidateIds.includes(normalizedId)) {
+        candidateIds.push(normalizedId);
+      }
+
+      for (const effectId of candidateIds) {
+        if (nodeMap.has(effectId)) {
+          const node = nodeMap.get(effectId);
+          const wasObserved = node.meta.observed;
+          node.meta.observed = true;
+          if (!node.meta.evidence) node.meta.evidence = [];
+          node.meta.evidence.push({
+            key: buildEvidenceKey(effect),
+            kind: effect.kind,
+            method: effect.method,
+            url: effect.url,
+            status: effect.status,
+            filename: effect.filename,
+            detail: effect.detail,
+          });
+          if (!wasObserved) nodesUpdated++;
+          observedEffects++;
+          matched = true;
+          break;
+        }
+      }
+
+      // If no match, create a new effect node
+      if (!matched) {
+        const newId = normalizeEffectId(effect);
+        let label;
+        if (effect.kind === 'fetch') {
+          label = `${effect.method || 'GET'} ${effect.url}`;
+        } else if (effect.kind === 'navigate') {
+          label = `navigate → ${effect.to}`;
+        } else if (effect.kind === 'download') {
+          label = `download → ${effect.filename}`;
+        } else if (effect.kind === 'storageWrite') {
+          label = `write → ${effect.key}`;
+        } else if (effect.kind === 'domEffect') {
+          label = `dom → ${effect.detail}`;
+        } else {
+          continue;
+        }
+
+        if (!nodeMap.has(newId)) {
+          const newNode = {
+            id: newId,
+            type: /** @type {const} */ ('effect'),
+            label,
+            meta: {
+              kind: effect.kind,
+              observed: true,
+              evidence: [{
+                key: buildEvidenceKey(effect),
+                kind: effect.kind,
+                method: effect.method,
+                url: effect.url,
+                status: effect.status,
+                filename: effect.filename,
+                detail: effect.detail,
+              }],
+            },
+          };
+          nodeMap.set(newId, newNode);
+          nodes.push(newNode);
+          nodesAdded++;
+          observedEffects++;
+        } else {
+          // Node already exists (created by earlier runtime effect) — append evidence
+          const existing = nodeMap.get(newId);
+          if (!existing.meta.evidence) existing.meta.evidence = [];
+          existing.meta.evidence.push({
+            key: buildEvidenceKey(effect),
+            kind: effect.kind,
+            method: effect.method,
+            url: effect.url,
+            status: effect.status,
+            filename: effect.filename,
+            detail: effect.detail,
+          });
+          observedEffects++;
+        }
+
+        // Add runtime_observed edge from trigger if we found the trigger node
+        if (triggerNode) {
+          edges.push({
+            from: triggerNode.id,
+            to: newId,
+            type: 'runtime_observed',
+          });
+          newEdges++;
+        }
+      }
+    }
+  }
+
+  // Deduplicate evidence + set confidence on all observed nodes
+  for (const node of nodes) {
+    if (node.meta.evidence && node.meta.evidence.length > 0) {
+      node.meta.evidence = deduplicateEvidence(node.meta.evidence);
+      node.meta.confidence = computeConfidence(node.meta.evidence);
+      node.meta.lastObservedAt = runtimeSummary.generated_at;
+      node.meta.observedCount = node.meta.evidence.length;
+    }
+  }
+
+  // Re-sort nodes and deduplicate edges
+  nodes.sort((a, b) => a.id.localeCompare(b.id));
+
+  const edgeKeys = new Set();
+  const dedupedEdges = [];
+  for (const e of edges) {
+    const key = `${e.from}→${e.to}→${e.type}`;
+    if (!edgeKeys.has(key)) {
+      edgeKeys.add(key);
+      dedupedEdges.push(e);
+    }
+  }
+  dedupedEdges.sort((a, b) =>
+    a.from.localeCompare(b.from) ||
+    a.to.localeCompare(b.to) ||
+    a.type.localeCompare(b.type)
+  );
+
+  // Recompute stats
+  /** @type {Record<string, number>} */
+  const byType = { trigger: 0, surface: 0, effect: 0, route: 0, feature: 0 };
+  for (const n of nodes) byType[n.type] = (byType[n.type] || 0) + 1;
+
+  /** @type {Record<string, number>} */
+  const byEdgeType = { maps_to: 0, produces: 0, writes: 0, navigates_to: 0, contains: 0, documents: 0, runtime_observed: 0 };
+  for (const e of dedupedEdges) byEdgeType[e.type] = (byEdgeType[e.type] || 0) + 1;
+
+  const orphanFeatures = findOrphanFeatures(nodes, dedupedEdges);
+  const orphanTriggers = findOrphanTriggers(nodes, dedupedEdges);
+
+  // Build graphDelta
+  const hasChanges = nodesAdded > 0 || nodesUpdated > 0 || observedEffects > 0 || newEdges > 0;
+  const reason = hasChanges
+    ? `augmented: ${nodesAdded} nodes added, ${nodesUpdated} nodes updated, ${observedEffects} effects observed, ${newEdges} new edges`
+    : 'no runtime effects matched';
+
+  /** @type {import('./types.mjs').GraphDelta} */
+  const graphDelta = { nodesAdded, nodesUpdated, observedEffects, newEdges, reason };
+
+  return {
+    version: hasChanges ? '1.1.0' : '1.0.0',
+    generated_at: graph.generated_at,
+    nodes,
+    edges: dedupedEdges,
+    stats: {
+      total_nodes: nodes.length,
+      by_type: /** @type {any} */ (byType),
+      total_edges: dedupedEdges.length,
+      by_edge_type: /** @type {any} */ (byEdgeType),
+      orphan_features: orphanFeatures.length,
+      orphan_triggers: orphanTriggers.length,
+    },
+    graphDelta,
+  };
+}
+
+// =============================================================================
 // CLI handler
 // =============================================================================
 
 /**
  * Run the Graph command.
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ verbose?: boolean }} flags
+ * @param {{ verbose?: boolean, withRuntime?: boolean }} flags
  */
 export async function runGraph(config, flags) {
   const cwd = process.cwd();
@@ -603,7 +836,27 @@ export async function runGraph(config, flags) {
   }
 
   // Build graph
-  const graph = buildGraph(triggers, routeChanges, surfaces, features, diff);
+  let graph = buildGraph(triggers, routeChanges, surfaces, features, diff);
+
+  // --with-runtime: augment with runtime effects if available
+  if (flags.withRuntime) {
+    const runtimePath = resolve(cwd, config.output.runtimeEffectsSummary);
+    if (existsSync(runtimePath)) {
+      try {
+        const runtimeSummary = JSON.parse(readFileSync(runtimePath, 'utf-8'));
+        graph = augmentWithRuntime(graph, runtimeSummary);
+        if (flags.verbose) {
+          console.log(`Graph: augmented with runtime effects (v${graph.version})`);
+        }
+      } catch (e) {
+        if (flags.verbose) {
+          console.log(`Graph: failed to load runtime effects: ${e.message}`);
+        }
+      }
+    } else if (flags.verbose) {
+      console.log('Graph: --with-runtime specified but no runtime-effects.summary.json found');
+    }
+  }
 
   // Compute surfacing values
   const surfacingValues = computeSurfacingValues(graph, diff.burial_index || []);
@@ -624,6 +877,7 @@ export async function runGraph(config, flags) {
 
   console.log(`Graph: ${graph.stats.total_nodes} nodes, ${graph.stats.total_edges} edges → ${relative(cwd, graphPath)}`);
   if (flags.verbose) {
+    console.log(`  Version: ${graph.version}`);
     console.log(`  Nodes: ${Object.entries(graph.stats.by_type).map(([k,v]) => `${v} ${k}`).join(', ')}`);
     console.log(`  Edges: ${Object.entries(graph.stats.by_edge_type).filter(([,v]) => v > 0).map(([k,v]) => `${v} ${k}`).join(', ')}`);
     console.log(`  Orphan features: ${graph.stats.orphan_features}, Orphan triggers: ${graph.stats.orphan_triggers}`);

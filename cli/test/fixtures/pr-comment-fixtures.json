@@ -1,0 +1,264 @@
+{
+  "verification_pass": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "pass": true,
+    "exit_code": 0,
+    "metrics": {
+      "total_features": 10,
+      "orphan_features": 2,
+      "orphan_ratio": 0.2,
+      "coverage_percent": 80,
+      "p0_count": 0,
+      "p1_count": 1,
+      "p2_count": 1,
+      "undocumented_surfaces": 3,
+      "ambiguous_matches": 0,
+      "high_burial_triggers": 0,
+      "memory_excluded": 0,
+      "must_surface_violations": 0
+    },
+    "blockers": [],
+    "warnings": [
+      { "rule": "low_coverage", "message": "Coverage 80% is within range" }
+    ],
+    "artifact_versions": { "diff": "1.1.0", "graph": "1.0.0", "plan": "1.0.0" }
+  },
+
+  "verification_fail": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "pass": false,
+    "exit_code": 1,
+    "metrics": {
+      "total_features": 8,
+      "orphan_features": 8,
+      "orphan_ratio": 1,
+      "coverage_percent": 0,
+      "p0_count": 2,
+      "p1_count": 1,
+      "p2_count": 5,
+      "undocumented_surfaces": 8,
+      "ambiguous_matches": 1,
+      "high_burial_triggers": 2,
+      "memory_excluded": 0,
+      "must_surface_violations": 3
+    },
+    "blockers": [
+      { "rule": "max_orphan_ratio", "message": "Orphan ratio 100% exceeds threshold 25% (8/8 features)", "threshold": 0.25, "actual": 1 },
+      { "rule": "must_surface_p0", "message": "Required P0 feature \"color-roles\" is orphaned", "threshold": 0, "actual": 1 },
+      { "rule": "p0_orphans", "message": "2 P0 orphan feature(s) in surfacing plan", "threshold": 0, "actual": 2 }
+    ],
+    "warnings": [
+      { "rule": "ambiguous_matches", "message": "1 ambiguous match(es) detected" },
+      { "rule": "high_burial", "message": "2 trigger(s) with burial score >= 5" },
+      { "rule": "low_coverage", "message": "Coverage 0% is below 50%" }
+    ],
+    "artifact_versions": { "diff": "1.1.0", "graph": "1.0.0", "plan": "1.0.0" },
+    "baseline_deltas": [
+      { "metric": "orphan_features", "baseline_value": 4, "current_value": 8, "change": 4, "direction": "regressed" },
+      { "metric": "orphan_ratio", "baseline_value": 0.5, "current_value": 1, "change": 0.5, "direction": "regressed" },
+      { "metric": "coverage_percent", "baseline_value": 50, "current_value": 0, "change": -50, "direction": "regressed" },
+      { "metric": "undocumented_surfaces", "baseline_value": 4, "current_value": 8, "change": 4, "direction": "regressed" },
+      { "metric": "p0_count", "baseline_value": 0, "current_value": 2, "change": 2, "direction": "regressed" },
+      { "metric": "ambiguous_matches", "baseline_value": 0, "current_value": 1, "change": 1, "direction": "regressed" },
+      { "metric": "high_burial_triggers", "baseline_value": 0, "current_value": 2, "change": 2, "direction": "regressed" }
+    ],
+    "baseline_id": "2026-01-01T00:00:00.000Z",
+    "must_surface_results": [
+      { "feature_id": "color-roles", "severity": "P0", "status": "orphaned", "reason": "Core differentiator" },
+      { "feature_id": "fast-iteration", "severity": "P1", "status": "ok" },
+      { "feature_id": "nonexistent", "severity": "P1", "status": "missing" },
+      { "feature_id": "type-scale", "severity": "P2", "status": "orphaned" }
+    ]
+  },
+
+  "plan_with_fixes": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "summary": {
+      "features_total": 8,
+      "features_planned": 8,
+      "routes_touched": ["/"],
+      "placements_by_rule": { "nav_menu_available": 8 },
+      "placements_by_priority": { "P0": 2, "P1": 1, "P2": 5 }
+    },
+    "plans": [
+      {
+        "feature_id": "search",
+        "feature_name": "Search",
+        "priority": "P0",
+        "intent_class": "navigate",
+        "why": { "diff_reason": "missing_surface", "evidence": ["README.md:10"] },
+        "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+        "control": { "label": "Search", "pattern_kind": "nav_item", "style_tokens": ["primary"], "data_aiui": "feature.search" },
+        "trigger": { "event": "click" },
+        "effect": { "intent": "navigate", "target": "/search" },
+        "acceptance_criteria": ["From /, user can reach 'Search' in <= 1 click(s)", "Nav item visible without overflow"]
+      },
+      {
+        "feature_id": "export",
+        "feature_name": "Export CSV",
+        "priority": "P0",
+        "intent_class": "data",
+        "why": { "diff_reason": "missing_surface", "evidence": ["README.md:20"] },
+        "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+        "control": { "label": "Export", "pattern_kind": "nav_item", "style_tokens": ["primary"], "data_aiui": "feature.export" },
+        "trigger": { "event": "click" },
+        "effect": { "intent": "data", "target": "/export" },
+        "acceptance_criteria": ["From /, user can reach 'Export' in <= 1 click(s)"]
+      },
+      {
+        "feature_id": "color-roles",
+        "feature_name": "Color roles",
+        "priority": "P1",
+        "intent_class": "navigate",
+        "why": { "diff_reason": "missing_surface", "evidence": ["README.md:60"] },
+        "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+        "control": { "label": "Color roles", "pattern_kind": "nav_item", "style_tokens": [], "data_aiui": "feature.color-roles" },
+        "trigger": { "event": "click" },
+        "effect": { "intent": "navigate", "target": "/color-roles" },
+        "acceptance_criteria": ["From /, user can reach 'Color roles' in <= 1 click(s)"]
+      },
+      {
+        "feature_id": "fast-iteration",
+        "feature_name": "Fast iteration",
+        "priority": "P2",
+        "intent_class": "navigate",
+        "why": { "diff_reason": "missing_surface", "evidence": ["README.md:70"] },
+        "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+        "control": { "label": "Fast iteration", "pattern_kind": "nav_item", "style_tokens": [], "data_aiui": "feature.fast-iteration" },
+        "trigger": { "event": "click" },
+        "effect": { "intent": "navigate", "target": "/fast-iteration" },
+        "acceptance_criteria": ["From /, user can reach 'Fast iteration' in <= 1 click(s)"]
+      },
+      {
+        "feature_id": "dark-mode",
+        "feature_name": "Dark mode",
+        "priority": "P2",
+        "intent_class": "config",
+        "why": { "diff_reason": "missing_surface", "evidence": ["README.md:61"] },
+        "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+        "control": { "label": "Dark mode", "pattern_kind": "nav_item", "style_tokens": [], "data_aiui": "feature.dark-mode" },
+        "trigger": { "event": "click" },
+        "effect": { "intent": "config", "target": "/settings" },
+        "acceptance_criteria": []
+      },
+      {
+        "feature_id": "analytics",
+        "feature_name": "Analytics",
+        "priority": "P2",
+        "intent_class": "navigate",
+        "why": { "diff_reason": "missing_surface", "evidence": ["README.md:80"] },
+        "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+        "control": { "label": "Analytics", "pattern_kind": "nav_item", "style_tokens": [], "data_aiui": "feature.analytics" },
+        "trigger": { "event": "click" },
+        "effect": { "intent": "navigate", "target": "/analytics" },
+        "acceptance_criteria": ["From /, user can reach 'Analytics' in <= 1 click(s)"]
+      }
+    ]
+  },
+
+  "plan_empty": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "summary": {
+      "features_total": 0,
+      "features_planned": 0,
+      "routes_touched": [],
+      "placements_by_rule": {},
+      "placements_by_priority": {}
+    },
+    "plans": []
+  },
+
+  "diff_with_orphans": {
+    "version": "1.1.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "documented_not_discoverable": [
+      {
+        "feature_id": "color-roles",
+        "feature_name": "Color roles",
+        "sources": ["README.md:60"],
+        "failure_reason": "missing_surface",
+        "top_candidates": [
+          {
+            "source_type": "trigger",
+            "source_id": "/|Theme toggle",
+            "source_label": "Theme toggle",
+            "source_route": "/",
+            "label_score": 0.3,
+            "pattern_score": 0,
+            "intent_score": 0,
+            "style_score": 0,
+            "composite_score": 0.15,
+            "match_dimension": "label"
+          }
+        ],
+        "suggestions": [{ "action": "Add 'Color roles' to nav", "rule": "nav_menu_available", "tag_hint": "data-aiui='feature.color-roles'" }],
+        "reason": "No matching surface found"
+      },
+      {
+        "feature_id": "fast-iteration",
+        "feature_name": "Fast iteration",
+        "sources": ["README.md:70"],
+        "failure_reason": "missing_surface",
+        "top_candidates": [],
+        "suggestions": [{ "action": "Add 'Fast iteration' to nav", "rule": "nav_menu_available", "tag_hint": "data-aiui='feature.fast-iteration'" }],
+        "reason": "No matching surface found"
+      },
+      {
+        "feature_id": "analytics",
+        "feature_name": "Analytics",
+        "sources": ["README.md:80"],
+        "failure_reason": "label_mismatch",
+        "top_candidates": [
+          {
+            "source_type": "trigger",
+            "source_id": "/|Stats",
+            "source_label": "Stats",
+            "source_route": "/",
+            "label_score": 0.4,
+            "pattern_score": 0.5,
+            "intent_score": 0.8,
+            "style_score": 0,
+            "composite_score": 0.62,
+            "match_dimension": "intent"
+          }
+        ],
+        "suggestions": [{ "action": "Rename 'Stats' to 'Analytics'", "rule": "label_match", "tag_hint": "data-aiui='feature.analytics'" }],
+        "reason": "Label mismatch with nearest candidate"
+      }
+    ],
+    "discoverable_not_documented": [],
+    "ambiguous_matches": [],
+    "matched": [],
+    "burial_index": [],
+    "stats": { "total_features": 8, "total_triggers": 5, "total_surfaces": 3, "matched": 5, "documented_not_discoverable": 3, "discoverable_not_documented": 0, "ambiguous_matches": 0, "coverage_percent": 62 }
+  },
+
+  "diff_clean": {
+    "version": "1.1.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "documented_not_discoverable": [],
+    "discoverable_not_documented": [],
+    "ambiguous_matches": [],
+    "matched": [],
+    "burial_index": [],
+    "stats": { "total_features": 10, "total_triggers": 10, "total_surfaces": 10, "matched": 10, "documented_not_discoverable": 0, "discoverable_not_documented": 0, "ambiguous_matches": 0, "coverage_percent": 100 }
+  },
+
+  "prConfig_default": {
+    "maxFixes": 5,
+    "maxBlockers": 10,
+    "maxWarnings": 10,
+    "format": "github"
+  },
+
+  "prConfig_tight": {
+    "maxFixes": 2,
+    "maxBlockers": 1,
+    "maxWarnings": 1,
+    "format": "github"
+  }
+}

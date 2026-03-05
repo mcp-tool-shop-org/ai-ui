@@ -1,0 +1,93 @@
+{
+  "graph": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "trigger:/|Get started", "type": "trigger", "label": "Get started", "route": "/", "meta": { "element": "button", "selector": "button", "parent_nav": false, "depth": 0 } },
+      { "id": "trigger:/|Search", "type": "trigger", "label": "Search", "route": "/", "meta": { "element": "button", "selector": ".search", "parent_nav": false, "depth": 0 } },
+      { "id": "trigger:/|Export", "type": "trigger", "label": "Export", "route": "/", "meta": { "element": "button", "selector": ".export", "parent_nav": false, "depth": 0 } },
+      { "id": "trigger:/|Delete", "type": "trigger", "label": "Delete", "route": "/", "meta": { "element": "button", "selector": ".delete", "parent_nav": false, "depth": 0, "styleTokens": ["destructive"] } },
+      { "id": "surface:cta-001", "type": "surface", "label": "Get started", "route": "/", "meta": { "role": "BUTTON", "pattern": null, "styleTokens": ["primary"] } },
+      { "id": "effect:navigate:/pricing", "type": "effect", "label": "navigate", "meta": { "kind": "navigate", "event": "click", "route": "/" } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Get started", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Search", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Export", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Delete", "type": "contains" },
+      { "from": "trigger:/|Get started", "to": "surface:cta-001", "type": "maps_to", "weight": 0.95 },
+      { "from": "surface:cta-001", "to": "effect:navigate:/pricing", "type": "produces" }
+    ],
+    "stats": {
+      "total_nodes": 7,
+      "by_type": { "trigger": 4, "surface": 1, "effect": 1, "route": 1, "feature": 0 },
+      "total_edges": 6,
+      "by_edge_type": { "maps_to": 1, "produces": 1, "writes": 0, "navigates_to": 0, "contains": 4, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 3
+    }
+  },
+
+  "runtimeSummary": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T01:00:00.000Z",
+    "url": "http://localhost:4321",
+    "triggers": [
+      {
+        "trigger_id": "click@get-started",
+        "route": "/",
+        "label": "Get started",
+        "effects": [
+          { "kind": "navigate", "trigger_id": "click@get-started", "route": "/", "window_ms": 200, "from": "/", "to": "/pricing" }
+        ]
+      },
+      {
+        "trigger_id": "click@search",
+        "route": "/",
+        "label": "Search",
+        "effects": [
+          { "kind": "fetch", "trigger_id": "click@search", "route": "/", "window_ms": 100, "method": "GET", "url": "/api/search?q=test", "status": 200 }
+        ]
+      },
+      {
+        "trigger_id": "click@surprise-btn",
+        "route": "/",
+        "label": "Surprise Button",
+        "effects": [
+          { "kind": "domEffect", "trigger_id": "click@surprise-btn", "route": "/", "window_ms": 50, "detail": "toast" }
+        ]
+      }
+    ],
+    "stats": {
+      "total_triggers": 5,
+      "triggers_fired": 3,
+      "triggers_skipped": 2,
+      "effects_captured": 3,
+      "by_kind": { "navigate": 1, "fetch": 1, "domEffect": 1 }
+    }
+  },
+
+  "probeEntries": [
+    { "type": "meta", "url": "http://localhost:4321", "started_at": "2026-01-01T00:00:00.000Z", "routes": ["/"] },
+    { "type": "trigger", "route": "/", "element": "button", "label": "Get started", "href": null, "selector": "button", "depth": 0, "parent_nav": false },
+    { "type": "trigger", "route": "/", "element": "button", "label": "Search", "href": null, "selector": ".search", "depth": 0, "parent_nav": false },
+    { "type": "trigger", "route": "/", "element": "button", "label": "Export", "href": null, "selector": ".export", "depth": 0, "parent_nav": false },
+    { "type": "trigger", "route": "/", "element": "button", "label": "Delete", "href": null, "selector": ".delete", "depth": 0, "parent_nav": false }
+  ],
+
+  "emptyGraph": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "nodes": [],
+    "edges": [],
+    "stats": {
+      "total_nodes": 0,
+      "by_type": { "trigger": 0, "surface": 0, "effect": 0, "route": 0, "feature": 0 },
+      "total_edges": 0,
+      "by_edge_type": { "maps_to": 0, "produces": 0, "writes": 0, "navigates_to": 0, "contains": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  }
+}

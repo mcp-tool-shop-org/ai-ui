@@ -1,0 +1,114 @@
+{
+  "baselineMetrics": {
+    "total_features": 8,
+    "orphan_features": 4,
+    "orphan_ratio": 0.5,
+    "coverage_percent": 40,
+    "p0_count": 1,
+    "p1_count": 2,
+    "p2_count": 3,
+    "undocumented_surfaces": 6,
+    "ambiguous_matches": 2,
+    "high_burial_triggers": 1,
+    "memory_excluded": 0
+  },
+  "currentMetrics_improved": {
+    "total_features": 8,
+    "orphan_features": 2,
+    "orphan_ratio": 0.25,
+    "coverage_percent": 60,
+    "p0_count": 0,
+    "p1_count": 3,
+    "p2_count": 2,
+    "undocumented_surfaces": 4,
+    "ambiguous_matches": 1,
+    "high_burial_triggers": 0,
+    "memory_excluded": 0
+  },
+  "currentMetrics_regressed": {
+    "total_features": 10,
+    "orphan_features": 7,
+    "orphan_ratio": 0.7,
+    "coverage_percent": 25,
+    "p0_count": 2,
+    "p1_count": 1,
+    "p2_count": 5,
+    "undocumented_surfaces": 15,
+    "ambiguous_matches": 4,
+    "high_burial_triggers": 3,
+    "memory_excluded": 0
+  },
+  "currentMetrics_unchanged": {
+    "total_features": 8,
+    "orphan_features": 4,
+    "orphan_ratio": 0.5,
+    "coverage_percent": 40,
+    "p0_count": 1,
+    "p1_count": 2,
+    "p2_count": 3,
+    "undocumented_surfaces": 6,
+    "ambiguous_matches": 2,
+    "high_burial_triggers": 1,
+    "memory_excluded": 0
+  },
+  "verdict": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-05T06:00:00.000Z",
+    "pass": false,
+    "exit_code": 1,
+    "metrics": {
+      "total_features": 8,
+      "orphan_features": 4,
+      "orphan_ratio": 0.5,
+      "coverage_percent": 40,
+      "p0_count": 1,
+      "p1_count": 2,
+      "p2_count": 3,
+      "undocumented_surfaces": 6,
+      "ambiguous_matches": 2,
+      "high_burial_triggers": 1,
+      "memory_excluded": 0
+    },
+    "blockers": [],
+    "warnings": [],
+    "artifact_versions": {
+      "diff": "1.1.0",
+      "graph": "1.0.0",
+      "plan": "1.0.0"
+    }
+  },
+  "baselineConfig_default": {
+    "failOnOrphanIncrease": true,
+    "maxUndocumentedIncrease": 5,
+    "warnOnCoverageDecrease": true
+  },
+  "baselineConfig_permissive": {
+    "failOnOrphanIncrease": false,
+    "maxUndocumentedIncrease": 100,
+    "warnOnCoverageDecrease": false
+  },
+  "baselineSnapshot": {
+    "version": "1.0.0",
+    "created_at": "2026-03-05T06:00:00.000Z",
+    "metrics": {
+      "total_features": 8,
+      "orphan_features": 4,
+      "orphan_ratio": 0.5,
+      "coverage_percent": 40,
+      "p0_count": 1,
+      "p1_count": 2,
+      "p2_count": 3,
+      "undocumented_surfaces": 6,
+      "ambiguous_matches": 2,
+      "high_burial_triggers": 1,
+      "memory_excluded": 0
+    },
+    "artifact_versions": {
+      "diff": "1.1.0",
+      "graph": "1.0.0",
+      "plan": "1.0.0"
+    },
+    "memory_hash": "abc123def456",
+    "verify_config_hash": "fed987cba654"
+  }
+}

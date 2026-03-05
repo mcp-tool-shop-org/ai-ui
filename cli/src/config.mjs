@@ -31,15 +31,39 @@ const DEFAULTS = {
     composeDot: 'ai-ui-output/surfacing-plan.dot',
     verify: 'ai-ui-output/verification.json',
     verifyReport: 'ai-ui-output/verification.md',
+    baseline: 'ai-ui-output/baseline.json',
+    mustSurface: 'ai-ui-output/must-surface.json',
+    prComment: 'ai-ui-output/pr-comment.md',
+    prCommentJson: 'ai-ui-output/pr-comment.json',
+    runtimeEffects: 'ai-ui-output/runtime-effects.jsonl',
+    runtimeEffectsSummary: 'ai-ui-output/runtime-effects.summary.json',
+    runtimeCoverage: 'ai-ui-output/runtime-coverage.json',
+    runtimeCoverageReport: 'ai-ui-output/runtime-coverage.md',
   },
   verify: {
     maxOrphanRatio: 0.25,
     maxUndocumentedSurfaces: 10,
     failOnP0Orphans: true,
   },
+  baseline: {
+    failOnOrphanIncrease: true,
+    maxUndocumentedIncrease: 5,
+    warnOnCoverageDecrease: true,
+  },
   memory: {
     dir: 'ai-ui-memory',
     strict: false,
+  },
+  runtimeEffects: {
+    routes: ['/'],
+    maxTriggersPerRoute: 20,
+    windowMs: 2500,
+    safe: {
+      denyLabelRegex: 'delete|remove|destroy|reset|logout|revoke|disable|unsubscribe|billing',
+      requireSafeAttrForDestructive: true,
+      denyHrefRegex: null,
+      denyMethodPatterns: [],
+    },
   },
 };
 

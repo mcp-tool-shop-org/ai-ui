@@ -1,0 +1,145 @@
+{
+  "triggers": {
+    "safe_button": { "label": "Get started", "safeAttr": null, "styleTokens": [] },
+    "destructive_label": { "label": "Delete account", "safeAttr": null, "styleTokens": [] },
+    "destructive_style": { "label": "Archive", "safeAttr": null, "styleTokens": ["destructive"] },
+    "destructive_override": { "label": "Delete account", "safeAttr": "true", "styleTokens": [] },
+    "safe_style_override": { "label": "Archive", "safeAttr": "true", "styleTokens": ["destructive"] },
+    "empty_label": { "label": "", "safeAttr": null, "styleTokens": [] },
+    "remove_label": { "label": "Remove item", "safeAttr": null, "styleTokens": [] },
+    "reset_label": { "label": "Reset form", "safeAttr": null, "styleTokens": [] },
+    "logout_label": { "label": "Logout now", "safeAttr": null, "styleTokens": [] },
+    "revoke_label": { "label": "Revoke access", "safeAttr": null, "styleTokens": [] },
+    "disable_label": { "label": "Disable notifications", "safeAttr": null, "styleTokens": [] },
+    "unsubscribe_label": { "label": "Unsubscribe from list", "safeAttr": null, "styleTokens": [] },
+    "billing_label": { "label": "Update billing", "safeAttr": null, "styleTokens": [] },
+    "href_admin": { "label": "Settings", "safeAttr": null, "styleTokens": [], "href": "/admin/danger-zone" },
+    "href_safe": { "label": "Settings", "safeAttr": null, "styleTokens": [], "href": "/settings/profile" },
+    "href_override": { "label": "Settings", "safeAttr": "true", "styleTokens": [], "href": "/admin/danger-zone" },
+    "href_delete_api": { "label": "Cleanup", "safeAttr": null, "styleTokens": [], "href": "/api/v1/users/42" }
+  },
+
+  "safeConfig_default": {
+    "denyLabelRegex": "delete|remove|destroy|reset|logout|revoke|disable|unsubscribe|billing",
+    "requireSafeAttrForDestructive": true,
+    "denyHrefRegex": null,
+    "denyMethodPatterns": []
+  },
+
+  "safeConfig_permissive": {
+    "denyLabelRegex": "destroy",
+    "requireSafeAttrForDestructive": false,
+    "denyHrefRegex": null,
+    "denyMethodPatterns": []
+  },
+
+  "safeConfig_href_deny": {
+    "denyLabelRegex": "delete|remove|destroy|reset",
+    "requireSafeAttrForDestructive": true,
+    "denyHrefRegex": "/admin/|/danger",
+    "denyMethodPatterns": []
+  },
+
+  "safeConfig_method_deny": {
+    "denyLabelRegex": "delete|remove|destroy|reset",
+    "requireSafeAttrForDestructive": true,
+    "denyHrefRegex": null,
+    "denyMethodPatterns": [
+      { "method": "DELETE", "urlPattern": "/api/" },
+      { "method": "POST", "urlPattern": "/admin/" }
+    ]
+  },
+
+  "fetchRaw": {
+    "post_checkout": { "method": "POST", "url": "http://localhost:4321/api/checkout", "status": 302, "timestamp": 1000150 },
+    "get_search": { "method": "GET", "url": "http://localhost:4321/api/search?q=test", "status": 200, "timestamp": 1000200 },
+    "external_api": { "method": "GET", "url": "https://cdn.example.com/data.json", "status": 200, "timestamp": 1000100 }
+  },
+
+  "navRaw": {
+    "internal": { "from": "http://localhost:4321/", "to": "http://localhost:4321/pricing", "timestamp": 1000200 },
+    "external": { "from": "http://localhost:4321/", "to": "https://docs.example.com/guide", "timestamp": 1000300 }
+  },
+
+  "downloadRaw": {
+    "csv": { "filename": "export.csv", "timestamp": 1000500 },
+    "pdf": { "filename": "report.pdf", "timestamp": 1000600 }
+  },
+
+  "storageRaw": {
+    "theme": { "scope": "local", "key": "theme", "timestamp": 1000050 },
+    "session_token": { "scope": "session", "key": "auth_token", "timestamp": 1000080 }
+  },
+
+  "domSnapshots": {
+    "no_change": {
+      "before": [
+        { "role": "navigation", "label": "Main", "visible": true },
+        { "role": "button", "label": "Submit", "visible": true }
+      ],
+      "after": [
+        { "role": "navigation", "label": "Main", "visible": true },
+        { "role": "button", "label": "Submit", "visible": true }
+      ]
+    },
+    "modal_open": {
+      "before": [
+        { "role": "navigation", "label": "Main", "visible": true }
+      ],
+      "after": [
+        { "role": "navigation", "label": "Main", "visible": true },
+        { "role": "dialog", "label": "Confirm", "visible": true }
+      ]
+    },
+    "toast": {
+      "before": [
+        { "role": "button", "label": "Save", "visible": true }
+      ],
+      "after": [
+        { "role": "button", "label": "Save", "visible": true },
+        { "role": "status", "label": "Saved!", "visible": true }
+      ]
+    },
+    "multi_effect": {
+      "before": [
+        { "role": "button", "label": "Submit", "visible": true }
+      ],
+      "after": [
+        { "role": "button", "label": "Submit", "visible": true },
+        { "role": "dialog", "label": "Processing", "visible": true },
+        { "role": "alert", "label": "Warning", "visible": true }
+      ]
+    },
+    "duplicate_dialogs": {
+      "before": [],
+      "after": [
+        { "role": "dialog", "label": "Modal A", "visible": true },
+        { "role": "dialog", "label": "Modal B", "visible": true }
+      ]
+    }
+  },
+
+  "jsonlEntries": {
+    "full_session": [
+      { "type": "meta", "url": "http://localhost:4321", "started_at": "2026-01-01T00:00:00.000Z", "routes": ["/"] },
+      { "type": "effect", "kind": "fetch", "trigger_id": "click@btn-cta", "route": "/", "label": "Get started", "method": "POST", "url": "/api/checkout", "status": 302, "window_ms": 150 },
+      { "type": "effect", "kind": "navigate", "trigger_id": "click@btn-cta", "route": "/", "label": "Get started", "from": "/", "to": "/pricing", "window_ms": 200 },
+      { "type": "effect", "kind": "fetch", "trigger_id": "click@link-search", "route": "/", "label": "Search", "method": "GET", "url": "/api/search", "status": 200, "window_ms": 100 },
+      { "type": "effect", "kind": "download", "trigger_id": "click@btn-export", "route": "/", "label": "Export", "filename": "data.csv", "window_ms": 500 },
+      { "type": "effect", "kind": "storageWrite", "trigger_id": "click@toggle-theme", "route": "/", "label": "Theme", "scope": "local", "key": "theme", "window_ms": 50 },
+      { "type": "effect", "kind": "domEffect", "trigger_id": "click@btn-save", "route": "/", "label": "Save", "detail": "modal_open", "window_ms": 300 },
+      { "type": "summary", "total_triggers": 20, "triggers_fired": 15, "triggers_skipped": 5, "effects_captured": 6, "by_kind": { "fetch": 2, "navigate": 1, "download": 1, "storageWrite": 1, "domEffect": 1 }, "duration_ms": 15000 }
+    ],
+    "empty_session": [
+      { "type": "meta", "url": "http://localhost:4321", "started_at": "2026-01-01T00:00:00.000Z", "routes": ["/"] },
+      { "type": "summary", "total_triggers": 5, "triggers_fired": 5, "triggers_skipped": 0, "effects_captured": 0, "by_kind": {}, "duration_ms": 5000 }
+    ],
+    "no_summary": [
+      { "type": "meta", "url": "http://localhost:4321", "started_at": "2026-01-01T00:00:00.000Z", "routes": ["/"] },
+      { "type": "effect", "kind": "fetch", "trigger_id": "click@btn", "route": "/", "label": "Go", "method": "GET", "url": "/api/data", "status": 200, "window_ms": 100 }
+    ]
+  },
+
+  "baseUrl": "http://localhost:4321",
+  "windowStart": 1000000
+}
