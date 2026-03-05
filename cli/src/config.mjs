@@ -23,6 +23,9 @@ const DEFAULTS = {
     diff: 'ai-ui-output/diff.json',
     diffReport: 'ai-ui-output/diff.md',
     surfaces: 'ai-ui-output/probe.surfaces.json',
+    graph: 'ai-ui-output/trigger-graph.json',
+    graphReport: 'ai-ui-output/trigger-graph.md',
+    graphDot: 'ai-ui-output/trigger-graph.dot',
   },
 };
 

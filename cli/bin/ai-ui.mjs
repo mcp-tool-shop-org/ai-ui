@@ -15,6 +15,7 @@ Commands:
   probe     Crawl the UI and record triggers (probe.jsonl)
   surfaces  Extract interactive surfaces from a WebSketch capture
   diff      Match atlas features against probe triggers (diff.json + diff.md)
+  graph     Build trigger graph from probe + surfaces + diff (trigger-graph.json/.md/.dot)
   stage0    Run atlas → probe → diff in sequence
 
 Options:
@@ -67,6 +68,11 @@ async function main() {
     case 'diff': {
       const { runDiff } = await import('../src/diff.mjs');
       await runDiff(config, flags);
+      break;
+    }
+    case 'graph': {
+      const { runGraph } = await import('../src/trigger-graph.mjs');
+      await runGraph(config, flags);
       break;
     }
     case 'stage0': {

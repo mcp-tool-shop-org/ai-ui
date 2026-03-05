@@ -5,7 +5,7 @@
  * @property {{ globs: string[], cliHelp: string|null }} docs
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string }} probe
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string }} output
  */
 
 /**
@@ -84,6 +84,67 @@
  * @property {string} feature_name
  * @property {CandidateAttempt[]} tied_candidates
  * @property {number} confidence_gap
+ */
+
+// =============================================================================
+// Phase 2: Trigger Graph types
+// =============================================================================
+
+/**
+ * @typedef {'trigger'|'surface'|'effect'|'route'|'feature'} GraphNodeType
+ */
+
+/**
+ * @typedef {Object} GraphNode
+ * @property {string} id         - Unique node ID (type-prefixed)
+ * @property {GraphNodeType} type
+ * @property {string} label      - Human-readable label
+ * @property {string} [route]    - Route context (optional for effects)
+ * @property {Record<string, any>} meta - Type-specific metadata
+ */
+
+/**
+ * @typedef {'maps_to'|'produces'|'writes'|'navigates_to'|'contains'|'documents'} GraphEdgeType
+ */
+
+/**
+ * @typedef {Object} GraphEdge
+ * @property {string} from  - Source node ID
+ * @property {string} to    - Target node ID
+ * @property {GraphEdgeType} type
+ * @property {number} [weight] - Edge weight (e.g., matchScore confidence)
+ * @property {Record<string, any>} [meta] - Edge-specific metadata
+ */
+
+/**
+ * @typedef {Object} TriggerGraph
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {GraphNode[]} nodes
+ * @property {GraphEdge[]} edges
+ * @property {TriggerGraphStats} stats
+ */
+
+/**
+ * @typedef {Object} TriggerGraphStats
+ * @property {number} total_nodes
+ * @property {Record<GraphNodeType, number>} by_type
+ * @property {number} total_edges
+ * @property {Record<GraphEdgeType, number>} by_edge_type
+ * @property {number} orphan_features
+ * @property {number} orphan_triggers
+ */
+
+/**
+ * @typedef {Object} SurfacingValue
+ * @property {string} trigger_id
+ * @property {string} label
+ * @property {string} route
+ * @property {number} value
+ * @property {number} feature_edges
+ * @property {number} effect_edges
+ * @property {boolean} has_surface
+ * @property {boolean} parent_nav
  */
 
 export {};

@@ -1,0 +1,151 @@
+{
+  "triggers": [
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "a",
+      "label": "Docs",
+      "href": "/docs",
+      "selector": "a.docs",
+      "depth": 0,
+      "parent_nav": true,
+      "timestamp": "2026-01-01T00:00:00Z"
+    },
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "a",
+      "label": "Get started",
+      "href": "/get-started",
+      "selector": "a.btn.primary",
+      "depth": 0,
+      "parent_nav": true,
+      "timestamp": "2026-01-01T00:00:00Z"
+    },
+    {
+      "type": "trigger",
+      "route": "/",
+      "element": "a",
+      "label": "Privacy",
+      "href": "/privacy",
+      "selector": "a.kicker",
+      "depth": 0,
+      "parent_nav": false,
+      "timestamp": "2026-01-01T00:00:00Z"
+    },
+    {
+      "type": "trigger",
+      "route": "/docs",
+      "element": "a",
+      "label": "Search",
+      "href": null,
+      "selector": "a.search",
+      "depth": 1,
+      "parent_nav": false,
+      "timestamp": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "routeChanges": [
+    { "type": "route_change", "from": "/", "to": "/docs", "trigger_label": "Docs" },
+    { "type": "route_change", "from": "/", "to": "/get-started", "trigger_label": "Get started" },
+    { "type": "route_change", "from": "/", "to": "/privacy", "trigger_label": "Privacy" }
+  ],
+  "surfaces": [
+    {
+      "nodeId": "link-docs",
+      "route": "/",
+      "role": "LINK",
+      "label": "docs",
+      "pattern": null,
+      "styleTokens": [],
+      "handlers": [{ "event": "click", "intent": "navigate" }],
+      "state": []
+    },
+    {
+      "nodeId": "btn-get-started",
+      "route": "/",
+      "role": "BUTTON",
+      "label": "get-started",
+      "pattern": null,
+      "styleTokens": ["primary"],
+      "handlers": [{ "event": "click", "intent": "navigate" }],
+      "state": []
+    },
+    {
+      "nodeId": "search-bar",
+      "route": "/docs",
+      "role": "INPUT",
+      "label": "search",
+      "pattern": "search_bar",
+      "styleTokens": [],
+      "handlers": [
+        { "event": "input", "intent": "filter" },
+        { "event": "submit", "intent": "search" }
+      ],
+      "state": [{ "key": "search.query", "access": "readwrite" }]
+    },
+    {
+      "nodeId": "btn-delete",
+      "route": "/settings",
+      "role": "BUTTON",
+      "label": "delete-account",
+      "pattern": null,
+      "styleTokens": ["destructive"],
+      "handlers": [{ "event": "click", "intent": "delete" }],
+      "state": []
+    }
+  ],
+  "features": [
+    {
+      "id": "search",
+      "name": "Search",
+      "synonyms": ["find"],
+      "sources": [{ "file": "README.md", "line": 10, "type": "bullet", "section": "Features" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "documentation",
+      "name": "Documentation",
+      "synonyms": ["docs"],
+      "sources": [{ "file": "README.md", "line": 15, "type": "bullet", "section": "Features" }],
+      "expected_entrypoints": []
+    },
+    {
+      "id": "color-roles",
+      "name": "Color roles",
+      "synonyms": [],
+      "sources": [{ "file": "README.md", "line": 60, "type": "bullet", "section": "Design Tokens" }],
+      "expected_entrypoints": []
+    }
+  ],
+  "diff": {
+    "version": "1.1.0",
+    "matched": [
+      {
+        "feature_id": "documentation",
+        "feature_name": "Documentation",
+        "trigger_label": "Docs",
+        "trigger_route": "/",
+        "match_type": "fuzzy",
+        "confidence": 0.45
+      }
+    ],
+    "documented_not_discoverable": [
+      {
+        "feature_id": "color-roles",
+        "feature_name": "Color roles",
+        "sources": ["README.md:60"],
+        "failure_reason": "missing_surface"
+      }
+    ],
+    "discoverable_not_documented": [],
+    "ambiguous_matches": [],
+    "burial_index": [
+      { "trigger_label": "Privacy", "route": "/", "depth": 0, "in_primary_nav": false, "behind_overflow": false, "burial_score": 3 },
+      { "trigger_label": "Docs", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Get started", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Search", "route": "/docs", "depth": 1, "in_primary_nav": false, "behind_overflow": false, "burial_score": 5 }
+    ],
+    "stats": {}
+  }
+}
