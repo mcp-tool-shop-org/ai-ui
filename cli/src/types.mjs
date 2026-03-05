@@ -5,7 +5,8 @@
  * @property {{ globs: string[], cliHelp: string|null }} docs
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string }} probe
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string }} output
+ * @property {VerifyConfig} verify
  */
 
 /**
@@ -184,6 +185,57 @@
  * @property {string[]} routes_touched
  * @property {Record<string, number>} placements_by_rule
  * @property {Record<string, number>} placements_by_priority
+ */
+
+// =============================================================================
+// Phase 4A: Verify + Gate types
+// =============================================================================
+
+/**
+ * @typedef {Object} VerifyConfig
+ * @property {number} maxOrphanRatio       - Fail if orphan/total > this (default 0.25)
+ * @property {number} maxUndocumentedSurfaces - Fail if discoverable_not_documented > this
+ * @property {boolean} failOnP0Orphans     - Fail if any P0 features in surfacing plan
+ */
+
+/**
+ * @typedef {Object} VerifyBlocker
+ * @property {string} rule     - Rule name (e.g. 'max_orphan_ratio')
+ * @property {string} message  - Human-readable explanation
+ * @property {number} [threshold]
+ * @property {number} [actual]
+ */
+
+/**
+ * @typedef {Object} VerifyWarning
+ * @property {string} rule
+ * @property {string} message
+ */
+
+/**
+ * @typedef {Object} VerifyMetrics
+ * @property {number} total_features
+ * @property {number} orphan_features
+ * @property {number} orphan_ratio
+ * @property {number} coverage_percent
+ * @property {number} p0_count
+ * @property {number} p1_count
+ * @property {number} p2_count
+ * @property {number} undocumented_surfaces
+ * @property {number} ambiguous_matches
+ * @property {number} high_burial_triggers
+ */
+
+/**
+ * @typedef {Object} VerifyVerdict
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {boolean} pass
+ * @property {number} exit_code
+ * @property {VerifyMetrics} metrics
+ * @property {VerifyBlocker[]} blockers
+ * @property {VerifyWarning[]} warnings
+ * @property {Record<string, string>} artifact_versions
  */
 
 export {};

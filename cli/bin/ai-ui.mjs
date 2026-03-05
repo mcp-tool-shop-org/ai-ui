@@ -5,7 +5,7 @@ import { loadConfig, fail } from '../src/config.mjs';
 const VERSION = '1.0.0';
 
 const HELP = `
-ai-ui — Stage 0: Docs↔UI Diff + Trigger Graph + Surfacing Composer
+ai-ui — Stage 0: Docs↔UI Diff + Trigger Graph + Surfacing Composer + Verify
 
 Usage:
   ai-ui <command> [options]
@@ -17,6 +17,7 @@ Commands:
   diff      Match atlas features against probe triggers (diff.json + diff.md)
   graph     Build trigger graph from probe + surfaces + diff (trigger-graph.json/.md/.dot)
   compose   Generate surfacing plan from diff + graph (surfacing-plan.json/.md/.dot)
+  verify    Judge pipeline artifacts and produce pass/fail verdict (verification.json/.md)
   stage0    Run atlas → probe → diff in sequence
 
 Options:
@@ -24,6 +25,9 @@ Options:
   --from <path>     Source capture file (for surfaces command)
   --out <path>      Override output path
   --verbose         Print extra output
+  --run-pipeline    (verify) Run full pipeline before judging
+  --strict          (verify) Zero-tolerance thresholds
+  --json            (verify) Print verdict JSON to stdout, no file writes
   --help            Show this help
   --version         Show version
 `.trim();
@@ -81,6 +85,11 @@ async function main() {
       await runCompose(config, flags);
       break;
     }
+    case 'verify': {
+      const { runVerify } = await import('../src/verify.mjs');
+      await runVerify(config, flags);
+      break;
+    }
     case 'stage0': {
       const { runStage0 } = await import('../src/stage0.mjs');
       await runStage0(config, flags);
@@ -94,10 +103,10 @@ async function main() {
 /**
  * Parse CLI flags from args.
  * @param {string[]} args
- * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean }}
+ * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean, runPipeline: boolean, strict: boolean, json: boolean }}
  */
 function parseFlags(args) {
-  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false };
+  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--config' && args[i + 1]) {
@@ -112,6 +121,12 @@ function parseFlags(args) {
       flags.help = true;
     } else if (a === '--version' || a === '-v') {
       flags.version = true;
+    } else if (a === '--run-pipeline') {
+      flags.runPipeline = true;
+    } else if (a === '--strict') {
+      flags.strict = true;
+    } else if (a === '--json') {
+      flags.json = true;
     }
   }
   return flags;

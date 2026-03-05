@@ -16,6 +16,7 @@
     "diff": "node cli/bin/ai-ui.mjs diff",
     "graph": "node cli/bin/ai-ui.mjs graph",
     "compose": "node cli/bin/ai-ui.mjs compose",
+    "verify": "node cli/bin/ai-ui.mjs verify",
     "stage0": "node cli/bin/ai-ui.mjs stage0",
     "test": "node --test cli/test/**/*.test.mjs"
   },

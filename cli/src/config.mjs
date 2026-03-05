@@ -29,6 +29,13 @@ const DEFAULTS = {
     composePlan: 'ai-ui-output/surfacing-plan.json',
     composeReport: 'ai-ui-output/surfacing-plan.md',
     composeDot: 'ai-ui-output/surfacing-plan.dot',
+    verify: 'ai-ui-output/verification.json',
+    verifyReport: 'ai-ui-output/verification.md',
+  },
+  verify: {
+    maxOrphanRatio: 0.25,
+    maxUndocumentedSurfaces: 10,
+    failOnP0Orphans: true,
   },
 };
 

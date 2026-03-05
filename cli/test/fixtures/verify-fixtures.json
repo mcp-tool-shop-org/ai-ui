@@ -1,0 +1,199 @@
+{
+  "passing": {
+    "diff": {
+      "version": "1.1.0",
+      "matched": [
+        { "feature_id": "search", "trigger_label": "Search", "trigger_route": "/", "match_type": "fuzzy", "confidence": 0.85 },
+        { "feature_id": "docs", "trigger_label": "Docs", "trigger_route": "/", "match_type": "exact", "confidence": 1.0 },
+        { "feature_id": "login", "trigger_label": "Login", "trigger_route": "/", "match_type": "exact", "confidence": 1.0 }
+      ],
+      "documented_not_discoverable": [
+        { "feature_id": "settings", "feature_name": "Settings", "sources": ["README.md:30"], "failure_reason": "missing_surface" }
+      ],
+      "discoverable_not_documented": [
+        { "trigger_label": "About", "trigger_route": "/", "reason": "No matching feature" }
+      ],
+      "ambiguous_matches": [],
+      "burial_index": [
+        { "trigger_label": "Search", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+        { "trigger_label": "Docs", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 }
+      ],
+      "stats": {
+        "total_features": 4,
+        "total_triggers": 5,
+        "total_surfaces": 3,
+        "matched": 3,
+        "documented_not_discoverable": 1,
+        "discoverable_not_documented": 1,
+        "ambiguous_matches": 0,
+        "coverage_percent": 75
+      }
+    },
+    "plan": {
+      "version": "1.0.0",
+      "generated_at": "2026-01-01T00:00:00Z",
+      "summary": {
+        "features_total": 4,
+        "features_planned": 1,
+        "routes_touched": ["/"],
+        "placements_by_rule": { "overflow_advanced": 1 },
+        "placements_by_priority": { "P2": 1 }
+      },
+      "plans": [
+        {
+          "feature_id": "settings",
+          "feature_name": "Settings",
+          "priority": "P2",
+          "intent_class": "config",
+          "why": { "diff_reason": "missing_surface", "evidence": ["README.md:30"] },
+          "placement": { "rule": "overflow_advanced", "route": "/", "surface_id": null, "pattern_slot": "overflow_menu" },
+          "control": { "label": "Settings", "pattern_kind": "menu_item", "style_tokens": [], "data_aiui": "feature.settings" },
+          "trigger": { "event": "click" },
+          "effect": { "intent": "navigate", "target": "/settings" },
+          "acceptance_criteria": ["From /, user can reach 'Settings' in <= 2 click(s)", "Menu item accessible via overflow menu on desktop", "Feature appears in AI-UI Probe surfaces on next run"]
+        }
+      ]
+    },
+    "graph": {
+      "version": "1.0.0",
+      "generated_at": "2026-01-01T00:00:00Z",
+      "nodes": [],
+      "edges": [],
+      "stats": {
+        "total_nodes": 12,
+        "by_type": { "trigger": 5, "surface": 3, "effect": 0, "route": 1, "feature": 4 },
+        "total_edges": 8,
+        "by_edge_type": { "maps_to": 3, "produces": 0, "writes": 0, "navigates_to": 2, "contains": 3, "documents": 3 },
+        "orphan_features": 1,
+        "orphan_triggers": 2
+      }
+    }
+  },
+  "failing": {
+    "diff": {
+      "version": "1.1.0",
+      "matched": [],
+      "documented_not_discoverable": [
+        { "feature_id": "search", "feature_name": "Search", "sources": ["README.md:10"], "failure_reason": "missing_surface" },
+        { "feature_id": "login", "feature_name": "Login", "sources": ["README.md:20"], "failure_reason": "missing_surface" },
+        { "feature_id": "export", "feature_name": "Export data", "sources": ["README.md:30"], "failure_reason": "missing_surface" },
+        { "feature_id": "settings", "feature_name": "Settings", "sources": ["README.md:40"], "failure_reason": "missing_surface" }
+      ],
+      "discoverable_not_documented": [
+        { "trigger_label": "A", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "B", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "C", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "D", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "E", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "F", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "G", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "H", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "I", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "J", "trigger_route": "/", "reason": "No matching feature" },
+        { "trigger_label": "K", "trigger_route": "/", "reason": "No matching feature" }
+      ],
+      "ambiguous_matches": [
+        { "feature_id": "export", "feature_name": "Export data", "tied_candidates": [], "confidence_gap": 0.02 }
+      ],
+      "burial_index": [
+        { "trigger_label": "Hidden", "route": "/", "depth": 3, "in_primary_nav": false, "behind_overflow": true, "burial_score": 8 },
+        { "trigger_label": "Deep", "route": "/a/b/c", "depth": 3, "in_primary_nav": false, "behind_overflow": true, "burial_score": 6 }
+      ],
+      "stats": {
+        "total_features": 4,
+        "total_triggers": 15,
+        "total_surfaces": 5,
+        "matched": 0,
+        "documented_not_discoverable": 4,
+        "discoverable_not_documented": 11,
+        "ambiguous_matches": 1,
+        "coverage_percent": 0
+      }
+    },
+    "plan": {
+      "version": "1.0.0",
+      "generated_at": "2026-01-01T00:00:00Z",
+      "summary": {
+        "features_total": 4,
+        "features_planned": 4,
+        "routes_touched": ["/"],
+        "placements_by_rule": { "nav_menu_available": 2, "overflow_advanced": 2 },
+        "placements_by_priority": { "P0": 2, "P1": 1, "P2": 1 }
+      },
+      "plans": [
+        {
+          "feature_id": "search",
+          "feature_name": "Search",
+          "priority": "P0",
+          "intent_class": "navigate",
+          "why": { "diff_reason": "missing_surface", "evidence": ["README.md:10"] },
+          "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+          "control": { "label": "Search", "pattern_kind": "nav_item", "style_tokens": ["primary"], "data_aiui": "feature.search" },
+          "trigger": { "event": "click" },
+          "effect": { "intent": "navigate", "target": "/search" },
+          "acceptance_criteria": ["From /, user can reach 'Search' in <= 1 click(s)", "Nav item visible without overflow on desktop", "Feature appears in AI-UI Probe surfaces on next run"]
+        },
+        {
+          "feature_id": "login",
+          "feature_name": "Login",
+          "priority": "P0",
+          "intent_class": "navigate",
+          "why": { "diff_reason": "missing_surface", "evidence": ["README.md:20"] },
+          "placement": { "rule": "nav_menu_available", "route": "/", "surface_id": null, "pattern_slot": "primary_nav" },
+          "control": { "label": "Login", "pattern_kind": "nav_item", "style_tokens": ["primary"], "data_aiui": "feature.login" },
+          "trigger": { "event": "click" },
+          "effect": { "intent": "navigate", "target": "/login" },
+          "acceptance_criteria": ["From /, user can reach 'Login' in <= 1 click(s)", "Nav item visible without overflow on desktop", "Feature appears in AI-UI Probe surfaces on next run"]
+        },
+        {
+          "feature_id": "export",
+          "feature_name": "Export data",
+          "priority": "P1",
+          "intent_class": "data",
+          "why": { "diff_reason": "missing_surface", "evidence": ["README.md:30"] },
+          "placement": { "rule": "overflow_advanced", "route": "/", "surface_id": null, "pattern_slot": "overflow_menu" },
+          "control": { "label": "Export data", "pattern_kind": "menu_item", "style_tokens": [], "data_aiui": "feature.export" },
+          "trigger": { "event": "click" },
+          "effect": { "intent": "navigate", "target": "/export" },
+          "acceptance_criteria": ["From /, user can reach 'Export data' in <= 2 click(s)", "Menu item accessible via overflow menu on desktop", "Feature appears in AI-UI Probe surfaces on next run"]
+        },
+        {
+          "feature_id": "settings",
+          "feature_name": "Settings",
+          "priority": "P2",
+          "intent_class": "config",
+          "why": { "diff_reason": "missing_surface", "evidence": ["README.md:40"] },
+          "placement": { "rule": "overflow_advanced", "route": "/", "surface_id": null, "pattern_slot": "overflow_menu" },
+          "control": { "label": "Settings", "pattern_kind": "menu_item", "style_tokens": [], "data_aiui": "feature.settings" },
+          "trigger": { "event": "click" },
+          "effect": { "intent": "navigate", "target": "/settings" },
+          "acceptance_criteria": ["From /, user can reach 'Settings' in <= 2 click(s)", "Menu item accessible via overflow menu on desktop", "Feature appears in AI-UI Probe surfaces on next run"]
+        }
+      ]
+    },
+    "graph": {
+      "version": "1.0.0",
+      "generated_at": "2026-01-01T00:00:00Z",
+      "nodes": [],
+      "edges": [],
+      "stats": {
+        "total_nodes": 20,
+        "by_type": { "trigger": 15, "surface": 5, "effect": 0, "route": 1, "feature": 4 },
+        "total_edges": 15,
+        "by_edge_type": { "maps_to": 0, "produces": 0, "writes": 0, "navigates_to": 0, "contains": 15, "documents": 0 },
+        "orphan_features": 4,
+        "orphan_triggers": 15
+      }
+    }
+  },
+  "defaultConfig": {
+    "maxOrphanRatio": 0.25,
+    "maxUndocumentedSurfaces": 10,
+    "failOnP0Orphans": true
+  },
+  "strictConfig": {
+    "maxOrphanRatio": 0,
+    "maxUndocumentedSurfaces": 0,
+    "failOnP0Orphans": true
+  }
+}
