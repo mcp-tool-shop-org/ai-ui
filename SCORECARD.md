@@ -14,9 +14,9 @@
 | B. Error Handling | 10/10 | Structured fail(code, message, hint), exit codes 0/1/2, no raw stacks |
 | C. Operator Docs | 10/10 | README overhauled, CHANGELOG, LICENSE, --help accurate, --verbose logging |
 | D. Shipping Hygiene | 9/10 | npm test (772 tests), engines.node set, pages.yml CI. No lockfile (astro starter) |
-| E. Identity (soft) | 8/10 | Logo in README, GitHub metadata set, landing page deployed. Missing: translations |
-| **Overall** | **47/50** | Hard gates A-D all pass. Soft gate E has 1 remaining item |
+| E. Identity (soft) | 10/10 | Logo in README, GitHub metadata set, landing page deployed, 7 translations |
+| **Overall** | **49/50** | All gates pass. Soft gate E complete. |
 
 ## Remaining gaps
 
-1. Translations (polyglot-mcp, 8 languages) — soft gate
+None — all gates pass.
