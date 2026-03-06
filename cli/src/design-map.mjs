@@ -562,9 +562,12 @@ export function buildFeatureMap(graph, diff, coverage, atlas) {
  * Infer task flows from navigation chains in the graph.
  * @param {import('./types.mjs').TriggerGraph} graph
  * @param {import('./types.mjs').CoverageReport|null} coverage
+ * @param {string} basePath
+ * @param {string[]} goalRoutes
+ * @param {import('./types.mjs').GoalRule[]} goalRules
  * @returns {import('./types.mjs').TaskFlow[]}
  */
-export function inferTaskFlows(graph, coverage, basePath = '', goalRoutes = []) {
+export function inferTaskFlows(graph, coverage, basePath = '', goalRoutes = [], goalRules = []) {
   // Build adjacency: route → triggers, trigger → navigates_to route
   const routeTriggers = new Map();
   const triggerNavTo = new Map();
@@ -703,8 +706,18 @@ export function inferTaskFlows(graph, coverage, basePath = '', goalRoutes = []) 
         }
       }
 
-      // Check if any step reaches a goal (detail page, docs, install, etc.)
-      // Strip basePath before testing — avoids false positives from /BasePath/route matching slug pattern
+      // --- Goal detection (three tiers) ---
+
+      // Evaluate goal rules per step (Stage 0E)
+      const runtimePresent = hasRuntimeEvidence(graph);
+      if (goalRules.length > 0) {
+        for (const step of steps) {
+          const trigKey = `trigger:${step.route}|${step.trigger_label}`;
+          step.goals_hit = evaluateGoalRules(trigKey, graph, goalRules, runtimePresent);
+        }
+      }
+
+      // Tier 1: Route-based goal (unchanged)
       const goalRouteSet = new Set(goalRoutes);
       const routeGoal = steps.some(s => {
         const r = stripBasePath(s.route, basePath);
@@ -714,23 +727,36 @@ export function inferTaskFlows(graph, coverage, basePath = '', goalRoutes = []) 
         return GOAL_RE.test(sr) || goalRouteSet.has(sr);
       });
 
-      // Effect-based goal: any step's trigger has an observed runtime effect
-      const effectGoal = !routeGoal && steps.some(s => {
+      // Tier 2: GoalRule-based — any step has goals_hit > 0
+      const ruleGoalHits = steps.flatMap(s => s.goals_hit || []);
+      const ruleGoal = ruleGoalHits.length > 0;
+
+      // Tier 3: Legacy effect-based (fallback when NO goalRules configured)
+      const effectGoal = !routeGoal && !ruleGoal && goalRules.length === 0 && steps.some(s => {
         const trigKey = `trigger:${s.route}|${s.trigger_label}`;
         const observed = getObservedEffectDetails(trigKey, graph);
         return observed.length > 0;
       });
 
-      flows.push({
+      /** @type {import('./types.mjs').TaskFlow} */
+      const flow = {
         task_name: `${startNode.label} flow`,
         steps,
         has_dead_end: hasDeadEnd,
         has_loop: hasLoop,
         loop_type: loopType,
-        goal_reached: routeGoal || effectGoal,
+        goal_reached: routeGoal || ruleGoal || effectGoal,
         has_destructive_step: hasDestructive,
         total_depth: steps.length,
-      });
+      };
+
+      // Stage 0E: aggregate goals per flow
+      if (ruleGoalHits.length > 0) {
+        flow.goals_reached = deduplicateGoalHits(ruleGoalHits);
+        flow.goal_score_total = flow.goals_reached.reduce((sum, h) => sum + h.score, 0);
+      }
+
+      flows.push(flow);
     }
   }
 
@@ -783,6 +809,256 @@ export function getObservedEffectDetails(triggerId, graph) {
   return allIds
     .map(id => nodeMap.get(id))
     .filter(n => n && n.meta?.observed && GOAL_EFFECT_KINDS.has(n.meta?.kind));
+}
+
+// =============================================================================
+// Goal Rule Evaluation (Stage 0E)
+// =============================================================================
+
+/**
+ * Check if the graph contains ANY runtime evidence at all.
+ * Used to distinguish "no goals reached" from "unknown (no runtime data)".
+ * @param {import('./types.mjs').TriggerGraph} graph
+ * @returns {boolean}
+ */
+export function hasRuntimeEvidence(graph) {
+  return graph.nodes.some(n => n.type === 'effect' && n.meta?.observed === true);
+}
+
+/**
+ * Get ALL effect nodes for a trigger (observed or not).
+ * Used for "unknown" confidence when runtime data is absent.
+ * @param {string} triggerId
+ * @param {import('./types.mjs').TriggerGraph} graph
+ * @returns {import('./types.mjs').GraphNode[]}
+ */
+function getAllEffectNodes(triggerId, graph) {
+  const surfaceIds = graph.edges
+    .filter(e => e.from === triggerId && e.type === 'maps_to')
+    .map(e => e.to);
+  const effectIds = graph.edges
+    .filter(e => surfaceIds.includes(e.from) && (e.type === 'produces' || e.type === 'writes'))
+    .map(e => e.to);
+  const runtimeIds = graph.edges
+    .filter(e => e.from === triggerId && e.type === 'runtime_observed')
+    .map(e => e.to);
+  const allIds = [...new Set([...effectIds, ...runtimeIds])];
+  const nodeMap = new Map(graph.nodes.map(n => [n.id, n]));
+  return allIds.map(id => nodeMap.get(id)).filter(n => n && GOAL_EFFECT_KINDS.has(n.meta?.kind));
+}
+
+/**
+ * @typedef {{ matched: boolean, summary?: string, confidence?: 'observed'|'unknown' }} MatchResult
+ */
+
+/**
+ * Match a storageWrite rule against effect nodes.
+ * @param {{ keyRegex?: string, valueRegex?: string }} config
+ * @param {import('./types.mjs').GraphNode[]} observed
+ * @param {import('./types.mjs').GraphNode[]} all
+ * @param {boolean} runtimePresent
+ * @param {boolean} requiresObserved
+ * @returns {MatchResult}
+ */
+function matchStorageRule(config, observed, all, runtimePresent, requiresObserved) {
+  const candidates = requiresObserved ? observed : all;
+  const storageNodes = candidates.filter(n => n.meta?.kind === 'storageWrite');
+
+  for (const n of storageNodes) {
+    const keyMatch = !config.keyRegex || (n.meta?.key && new RegExp(config.keyRegex, 'i').test(n.meta.key));
+    const valMatch = !config.valueRegex || (n.meta?.value && new RegExp(config.valueRegex, 'i').test(n.meta.value));
+    if (keyMatch && valMatch) {
+      return {
+        matched: true,
+        summary: `storageWrite: ${n.meta?.key || '(key)'}`,
+        confidence: n.meta?.observed ? 'observed' : 'unknown',
+      };
+    }
+  }
+
+  // If no runtime evidence, check unobserved nodes for structural match → unknown
+  if (!runtimePresent && requiresObserved) {
+    const unobserved = all.filter(n => n.meta?.kind === 'storageWrite' && !n.meta?.observed);
+    for (const n of unobserved) {
+      const keyMatch = !config.keyRegex || (n.meta?.key && new RegExp(config.keyRegex, 'i').test(n.meta.key));
+      const valMatch = !config.valueRegex || (n.meta?.value && new RegExp(config.valueRegex, 'i').test(n.meta.value));
+      if (keyMatch && valMatch) {
+        return { matched: true, summary: `storageWrite: ${n.meta?.key || '(key)'} (unverified)`, confidence: 'unknown' };
+      }
+    }
+  }
+
+  return { matched: false };
+}
+
+/**
+ * Match a fetch rule against effect nodes.
+ * @param {{ method?: string[], urlRegex?: string, status?: number[] }} config
+ * @param {import('./types.mjs').GraphNode[]} observed
+ * @param {import('./types.mjs').GraphNode[]} all
+ * @param {boolean} runtimePresent
+ * @param {boolean} requiresObserved
+ * @returns {MatchResult}
+ */
+function matchFetchRule(config, observed, all, runtimePresent, requiresObserved) {
+  const candidates = requiresObserved ? observed : all;
+  const fetchNodes = candidates.filter(n => n.meta?.kind === 'fetch');
+
+  for (const n of fetchNodes) {
+    const methodMatch = !config.method || config.method.includes(n.meta?.method);
+    const urlMatch = !config.urlRegex || (n.meta?.url && new RegExp(config.urlRegex, 'i').test(n.meta.url));
+    const statusMatch = !config.status || config.status.includes(n.meta?.status);
+    if (methodMatch && urlMatch && statusMatch) {
+      return {
+        matched: true,
+        summary: `fetch: ${n.meta?.method || ''} ${n.meta?.url || '(url)'}`,
+        confidence: n.meta?.observed ? 'observed' : 'unknown',
+      };
+    }
+  }
+
+  if (!runtimePresent && requiresObserved) {
+    const unobserved = all.filter(n => n.meta?.kind === 'fetch' && !n.meta?.observed);
+    for (const n of unobserved) {
+      const methodMatch = !config.method || config.method.includes(n.meta?.method);
+      const urlMatch = !config.urlRegex || (n.meta?.url && new RegExp(config.urlRegex, 'i').test(n.meta.url));
+      if (methodMatch && urlMatch) {
+        return { matched: true, summary: `fetch: ${n.meta?.method || ''} ${n.meta?.url || '(url)'} (unverified)`, confidence: 'unknown' };
+      }
+    }
+  }
+
+  return { matched: false };
+}
+
+/**
+ * Match a domEffect rule against effect nodes.
+ * @param {{ selector?: string, textRegex?: string, goalId?: string }} config
+ * @param {import('./types.mjs').GraphNode[]} observed
+ * @param {import('./types.mjs').GraphNode[]} all
+ * @param {boolean} runtimePresent
+ * @param {boolean} requiresObserved
+ * @returns {MatchResult}
+ */
+function matchDomRule(config, observed, all, runtimePresent, requiresObserved) {
+  const candidates = requiresObserved ? observed : all;
+  const domNodes = candidates.filter(n => n.meta?.kind === 'domEffect');
+
+  for (const n of domNodes) {
+    // Direct goalId match (from data-aiui-goal attribute)
+    if (config.goalId && n.meta?.goalId && n.meta.goalId === config.goalId) {
+      return { matched: true, summary: `goalId: ${n.meta.goalId}`, confidence: n.meta?.observed ? 'observed' : 'unknown' };
+    }
+    // textRegex match against detail
+    if (config.textRegex && n.meta?.detail) {
+      if (new RegExp(config.textRegex, 'i').test(n.meta.detail)) {
+        return { matched: true, summary: `domEffect: ${n.meta.detail}`, confidence: n.meta?.observed ? 'observed' : 'unknown' };
+      }
+    }
+    // selector match
+    if (config.selector && n.meta?.selector) {
+      if (n.meta.selector.includes(config.selector)) {
+        return { matched: true, summary: `selector: ${config.selector}`, confidence: n.meta?.observed ? 'observed' : 'unknown' };
+      }
+    }
+  }
+
+  if (!runtimePresent && requiresObserved) {
+    const unobserved = all.filter(n => n.meta?.kind === 'domEffect' && !n.meta?.observed);
+    for (const n of unobserved) {
+      if (config.goalId && n.meta?.goalId && n.meta.goalId === config.goalId) {
+        return { matched: true, summary: `goalId: ${n.meta.goalId} (unverified)`, confidence: 'unknown' };
+      }
+      if (config.textRegex && n.meta?.detail && new RegExp(config.textRegex, 'i').test(n.meta.detail)) {
+        return { matched: true, summary: `domEffect: ${n.meta.detail} (unverified)`, confidence: 'unknown' };
+      }
+    }
+  }
+
+  return { matched: false };
+}
+
+/**
+ * Evaluate goal rules against a trigger's observed effects.
+ * @param {string} triggerId
+ * @param {import('./types.mjs').TriggerGraph} graph
+ * @param {import('./types.mjs').GoalRule[]} goalRules
+ * @param {boolean} runtimePresent - true if graph has ANY runtime evidence
+ * @returns {import('./types.mjs').GoalHit[]}
+ */
+export function evaluateGoalRules(triggerId, graph, goalRules, runtimePresent) {
+  if (goalRules.length === 0) return [];
+
+  const observed = getObservedEffectDetails(triggerId, graph);
+  const all = getAllEffectNodes(triggerId, graph);
+
+  /** @type {import('./types.mjs').GoalHit[]} */
+  const hits = [];
+
+  for (const rule of goalRules) {
+    const requiresObserved = rule.requiresObserved !== false;
+    const score = rule.score ?? 1;
+
+    if (rule.kind === 'composite') {
+      /** @type {MatchResult[]} */
+      const subResults = [];
+      if (rule.storage) subResults.push(matchStorageRule(rule.storage, observed, all, runtimePresent, requiresObserved));
+      if (rule.fetch) subResults.push(matchFetchRule(rule.fetch, observed, all, runtimePresent, requiresObserved));
+      if (rule.dom) subResults.push(matchDomRule(rule.dom, observed, all, runtimePresent, requiresObserved));
+
+      if (subResults.length === 0) continue;
+      // ALL sub-predicates must match (AND logic)
+      if (subResults.every(r => r.matched)) {
+        hits.push({
+          rule_id: rule.id,
+          rule_label: rule.label,
+          score,
+          evidence_summary: subResults.map(r => r.summary).join(' + '),
+          confidence: subResults.some(r => r.confidence === 'unknown') ? 'unknown' : 'observed',
+        });
+      }
+    } else {
+      // Single-kind rule — dispatch by kind
+      /** @type {MatchResult} */
+      let result = { matched: false };
+      if (rule.kind === 'storageWrite' && rule.storage) {
+        result = matchStorageRule(rule.storage, observed, all, runtimePresent, requiresObserved);
+      } else if (rule.kind === 'fetch' && rule.fetch) {
+        result = matchFetchRule(rule.fetch, observed, all, runtimePresent, requiresObserved);
+      } else if (rule.kind === 'domEffect' && rule.dom) {
+        result = matchDomRule(rule.dom, observed, all, runtimePresent, requiresObserved);
+      }
+
+      if (result.matched) {
+        hits.push({
+          rule_id: rule.id,
+          rule_label: rule.label,
+          score,
+          evidence_summary: result.summary || '',
+          confidence: result.confidence || 'unknown',
+        });
+      }
+    }
+  }
+
+  return hits;
+}
+
+/**
+ * Deduplicate GoalHits by rule_id, keeping highest score.
+ * @param {import('./types.mjs').GoalHit[]} hits
+ * @returns {import('./types.mjs').GoalHit[]}
+ */
+export function deduplicateGoalHits(hits) {
+  /** @type {Map<string, import('./types.mjs').GoalHit>} */
+  const best = new Map();
+  for (const h of hits) {
+    const existing = best.get(h.rule_id);
+    if (!existing || h.score > existing.score) {
+      best.set(h.rule_id, h);
+    }
+  }
+  return [...best.values()];
 }
 
 // =============================================================================
@@ -929,6 +1205,11 @@ export function proposeIA(inventory, featureMap, taskFlows) {
       f.steps.length > 0 && f.steps[0].trigger_label.toLowerCase() === labelLower
     );
     const goalFlows = matchingFlows.filter(f => f.goal_reached);
+    // Stage 0E: collect distinct goals across matching flows
+    const flowGoalHits = goalFlows.flatMap(f => f.goals_reached || []);
+    const distinctGoals = deduplicateGoalHits(flowGoalHits);
+    const bestScore = goalFlows.reduce((max, f) => Math.max(max, f.goal_score_total || 0), 0);
+
     conversionPaths.push({
       nav_label: navItem.label,
       route: navItem.route,
@@ -937,6 +1218,8 @@ export function proposeIA(inventory, featureMap, taskFlows) {
       sample_goal: goalFlows.length > 0
         ? goalFlows[0].steps[goalFlows[0].steps.length - 1]?.route || null
         : null,
+      goals_hit: distinctGoals.length > 0 ? distinctGoals : undefined,
+      goal_score: bestScore > 0 ? bestScore : undefined,
     });
   }
 
@@ -1051,7 +1334,16 @@ export function renderTaskFlowsMd(flows) {
     if (flow.loop_type === 'browse_loop') tags.push('BROWSE LOOP');
     else if (flow.loop_type === 'nav_loop') tags.push('NAV LOOP');
     else if (flow.has_loop) tags.push('LOOP');
-    if (flow.goal_reached) tags.push('GOAL REACHED');
+    if (flow.goal_reached) {
+      if (flow.goals_reached?.length > 0) {
+        const goalLabels = flow.goals_reached.map(g => g.rule_label).join(', ');
+        const unknowns = flow.goals_reached.filter(g => g.confidence === 'unknown').length;
+        const suffix = unknowns > 0 ? ` (${unknowns} unknown)` : '';
+        tags.push(`GOALS: ${goalLabels}${suffix} [score: ${flow.goal_score_total}]`);
+      } else {
+        tags.push('GOAL REACHED');
+      }
+    }
     if (flow.has_destructive_step) tags.push('DESTRUCTIVE');
     const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 
@@ -1064,7 +1356,10 @@ export function renderTaskFlowsMd(flows) {
       const effects = step.effects.length > 0 ? ` (${step.effects.join(', ')})` : '';
       const destructive = step.is_destructive ? ' **[DESTRUCTIVE]**' : '';
       const deadEnd = step.step_type === 'dead_end' ? ' ⊘' : '';
-      lines.push(`${prefix}: ${step.route} > ${step.trigger_label}${effects}${destructive}${deadEnd}`);
+      const goalHits = step.goals_hit?.length > 0
+        ? ` **[${step.goals_hit.map(g => g.rule_label).join(', ')}]**`
+        : '';
+      lines.push(`${prefix}: ${step.route} > ${step.trigger_label}${effects}${destructive}${deadEnd}${goalHits}`);
     }
     lines.push('');
   }
@@ -1140,11 +1435,23 @@ export function renderIAProposalMd(proposal) {
   if (proposal.conversion_paths?.length > 0) {
     lines.push('## Conversion Paths');
     lines.push('');
-    lines.push('| Nav Item | Flows | Goals Reached | Sample Goal |');
-    lines.push('|----------|-------|---------------|-------------|');
-    for (const cp of proposal.conversion_paths) {
-      const goal = cp.sample_goal || '—';
-      lines.push(`| ${cp.nav_label} | ${cp.flow_count} | ${cp.goal_reached_count} | ${goal} |`);
+    const hasGoalRules = proposal.conversion_paths.some(cp => cp.goals_hit?.length > 0);
+    if (hasGoalRules) {
+      lines.push('| Nav Item | Flows | Goals Reached | Goal Score | Goals | Sample Goal |');
+      lines.push('|----------|-------|---------------|------------|-------|-------------|');
+      for (const cp of proposal.conversion_paths) {
+        const goal = cp.sample_goal || '—';
+        const goalNames = cp.goals_hit?.map(g => g.rule_label).join(', ') || '—';
+        const score = cp.goal_score ?? '—';
+        lines.push(`| ${cp.nav_label} | ${cp.flow_count} | ${cp.goal_reached_count} | ${score} | ${goalNames} | ${goal} |`);
+      }
+    } else {
+      lines.push('| Nav Item | Flows | Goals Reached | Sample Goal |');
+      lines.push('|----------|-------|---------------|-------------|');
+      for (const cp of proposal.conversion_paths) {
+        const goal = cp.sample_goal || '—';
+        lines.push(`| ${cp.nav_label} | ${cp.flow_count} | ${cp.goal_reached_count} | ${goal} |`);
+      }
     }
     lines.push('');
   }
@@ -1182,7 +1489,8 @@ export async function runDesignMap(config, flags) {
   const featureMap = buildFeatureMap(inputs.graph, inputs.diff, inputs.coverage, inputs.atlas);
   const basePath = config.probe.basePath || detectBasePath(config.probe.baseUrl);
   const goalRoutes = config.probe.goalRoutes || [];
-  const taskFlows = inferTaskFlows(inputs.graph, inputs.coverage, basePath, goalRoutes);
+  const goalRules = config.goalRules || [];
+  const taskFlows = inferTaskFlows(inputs.graph, inputs.coverage, basePath, goalRoutes, goalRules);
   const proposal = proposeIA(inventory, featureMap, taskFlows);
 
   // Write outputs

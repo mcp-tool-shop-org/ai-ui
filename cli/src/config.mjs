@@ -84,6 +84,7 @@ const DEFAULTS = {
       denyMethodPatterns: [],
     },
   },
+  goalRules: [],
 };
 
 /**

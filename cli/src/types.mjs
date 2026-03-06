@@ -12,6 +12,7 @@
  * @property {MemoryConfig} memory
  * @property {RuntimeEffectsConfig} runtimeEffects
  * @property {CoverageGateConfig} coverageGate
+ * @property {GoalRule[]} goalRules
  */
 
 /**
@@ -834,6 +835,7 @@
  * @property {'navigate'|'action'|'confirmation'|'dead_end'} step_type
  * @property {string[]} effects
  * @property {boolean} is_destructive
+ * @property {GoalHit[]} [goals_hit]              - Stage 0E: matched goal rules for this step
  */
 
 /**
@@ -846,6 +848,8 @@
  * @property {boolean} goal_reached         - true if flow reaches a detail/docs/install page
  * @property {boolean} has_destructive_step
  * @property {number} total_depth
+ * @property {GoalHit[]} [goals_reached]          - Stage 0E: all goals hit across steps (deduplicated)
+ * @property {number} [goal_score_total]           - Stage 0E: sum of all goal scores
  */
 
 /**
@@ -870,9 +874,42 @@
 
 /**
  * @typedef {Object} IAConversionPath
- * @property {string} from_label   - Nav item label
- * @property {string} to_route     - Goal route
- * @property {boolean} goal_reached
+ * @property {string} nav_label               - Nav item label
+ * @property {string} route                   - Start route
+ * @property {number} flow_count              - Total flows from this nav item
+ * @property {number} goal_reached_count      - Flows that reach a goal
+ * @property {string|null} sample_goal        - Example goal route
+ * @property {GoalHit[]} [goals_hit]          - Stage 0E: distinct goals across matching flows
+ * @property {number} [goal_score]            - Stage 0E: best score among matching flows
+ */
+
+// =============================================================================
+// Stage 0E: Goal Rules types
+// =============================================================================
+
+/** @typedef {'storageWrite'|'fetch'|'domEffect'|'composite'} GoalRuleKind */
+
+/**
+ * A named, scored predicate that matches against observed runtime effects.
+ * @typedef {Object} GoalRule
+ * @property {string} id                          - Unique identifier, e.g. "audio_open"
+ * @property {string} label                       - Human-readable, e.g. "Open Audio Settings"
+ * @property {GoalRuleKind} kind
+ * @property {{ keyRegex?: string, valueRegex?: string }} [storage]
+ * @property {{ method?: string[], urlRegex?: string, status?: number[] }} [fetch]
+ * @property {{ selector?: string, textRegex?: string, goalId?: string }} [dom]
+ * @property {boolean} [requiresObserved]          - Default true; when false, structural match suffices
+ * @property {number} [score]                      - Significance weight, default 1
+ */
+
+/**
+ * A matched goal — produced by evaluateGoalRules when a GoalRule matches evidence.
+ * @typedef {Object} GoalHit
+ * @property {string} rule_id                     - GoalRule.id that matched
+ * @property {string} rule_label                  - GoalRule.label
+ * @property {number} score                       - GoalRule.score
+ * @property {string} evidence_summary            - Short description of what matched
+ * @property {'observed'|'unknown'} confidence    - 'unknown' when runtime data absent
  */
 
 export {};

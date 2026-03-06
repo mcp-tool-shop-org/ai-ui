@@ -20,6 +20,9 @@ import {
   looksLikeSentence,
   isArchitecturalCapability,
   getObservedEffectDetails,
+  hasRuntimeEvidence,
+  evaluateGoalRules,
+  deduplicateGoalHits,
 } from '../src/design-map.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -862,5 +865,330 @@ describe('getObservedEffectDetails', () => {
     };
     const result = getObservedEffectDetails('trigger:/|Click', graph);
     assert.equal(result.length, 0);
+  });
+});
+
+// =============================================================================
+// hasRuntimeEvidence (Stage 0E)
+// =============================================================================
+
+describe('hasRuntimeEvidence', () => {
+  it('returns true when graph has observed effect nodes', () => {
+    const graph = {
+      nodes: [
+        { id: 'trigger:/|Btn', type: 'trigger', label: 'Btn', route: '/', meta: {} },
+        { id: 'effect:sw:key', type: 'effect', label: 'storageWrite', route: '/', meta: { kind: 'storageWrite', observed: true } },
+      ],
+      edges: [],
+    };
+    assert.equal(hasRuntimeEvidence(graph), true);
+  });
+
+  it('returns false when no observed effect nodes exist', () => {
+    const graph = {
+      nodes: [
+        { id: 'trigger:/|Btn', type: 'trigger', label: 'Btn', route: '/', meta: {} },
+        { id: 'effect:sw:key', type: 'effect', label: 'storageWrite', route: '/', meta: { kind: 'storageWrite', observed: false } },
+      ],
+      edges: [],
+    };
+    assert.equal(hasRuntimeEvidence(graph), false);
+  });
+
+  it('returns false for empty graph', () => {
+    assert.equal(hasRuntimeEvidence({ nodes: [], edges: [] }), false);
+  });
+});
+
+// =============================================================================
+// evaluateGoalRules (Stage 0E)
+// =============================================================================
+
+describe('evaluateGoalRules', () => {
+  /** Helper: build a minimal graph with a trigger and connected effect node */
+  function goalGraph(triggerId, effectNode, edgeType = 'runtime_observed') {
+    return {
+      nodes: [
+        { id: triggerId, type: 'trigger', label: 'Btn', route: '/', meta: {} },
+        effectNode,
+      ],
+      edges: [
+        { from: triggerId, to: effectNode.id, type: edgeType },
+      ],
+    };
+  }
+
+  it('returns empty when goalRules is empty', () => {
+    const graph = { nodes: [], edges: [] };
+    assert.deepEqual(evaluateGoalRules('trigger:/|X', graph, [], true), []);
+  });
+
+  it('matches storageWrite rule with keyRegex', () => {
+    const graph = goalGraph('trigger:/|Save', {
+      id: 'effect:sw:audio.vol', type: 'effect', label: 'storageWrite', route: '/',
+      meta: { kind: 'storageWrite', observed: true, key: 'lokey.audio.volume' },
+    });
+    const rules = [{ id: 'audio_change', label: 'Change Audio', kind: 'storageWrite', storage: { keyRegex: '^lokey\\.audio\\.' }, score: 5 }];
+    const hits = evaluateGoalRules('trigger:/|Save', graph, rules, true);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].rule_id, 'audio_change');
+    assert.equal(hits[0].score, 5);
+    assert.equal(hits[0].confidence, 'observed');
+    assert.ok(hits[0].evidence_summary.includes('lokey.audio.volume'));
+  });
+
+  it('does not match storageWrite rule when keyRegex fails', () => {
+    const graph = goalGraph('trigger:/|Save', {
+      id: 'effect:sw:other', type: 'effect', label: 'storageWrite', route: '/',
+      meta: { kind: 'storageWrite', observed: true, key: 'app.theme' },
+    });
+    const rules = [{ id: 'audio_change', label: 'Change Audio', kind: 'storageWrite', storage: { keyRegex: '^lokey\\.audio\\.' }, score: 5 }];
+    const hits = evaluateGoalRules('trigger:/|Save', graph, rules, true);
+    assert.equal(hits.length, 0);
+  });
+
+  it('matches fetch rule with method and urlRegex', () => {
+    const graph = goalGraph('trigger:/|Submit', {
+      id: 'effect:fetch:api', type: 'effect', label: 'fetch', route: '/',
+      meta: { kind: 'fetch', observed: true, method: 'POST', url: '/api/save-score' },
+    });
+    const rules = [{ id: 'score_save', label: 'Save Score', kind: 'fetch', fetch: { method: ['POST'], urlRegex: '/api/save' }, score: 3 }];
+    const hits = evaluateGoalRules('trigger:/|Submit', graph, rules, true);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].rule_id, 'score_save');
+    assert.equal(hits[0].confidence, 'observed');
+  });
+
+  it('matches domEffect rule with textRegex', () => {
+    const graph = goalGraph('trigger:/|Settings', {
+      id: 'effect:dom:modal', type: 'effect', label: 'domEffect', route: '/',
+      meta: { kind: 'domEffect', observed: true, detail: 'modal_open' },
+    });
+    const rules = [{ id: 'settings_open', label: 'Open Settings', kind: 'domEffect', dom: { textRegex: 'modal_open' }, score: 2 }];
+    const hits = evaluateGoalRules('trigger:/|Settings', graph, rules, true);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].rule_id, 'settings_open');
+    assert.ok(hits[0].evidence_summary.includes('modal_open'));
+  });
+
+  it('matches domEffect rule with goalId (data-aiui-goal convention)', () => {
+    const graph = goalGraph('trigger:/|Settings', {
+      id: 'effect:dom:goal', type: 'effect', label: 'domEffect', route: '/',
+      meta: { kind: 'domEffect', observed: true, goalId: 'audio_settings_open', detail: 'modal_open' },
+    });
+    const rules = [{ id: 'audio_open', label: 'Open Audio Settings', kind: 'domEffect', dom: { goalId: 'audio_settings_open' }, score: 2 }];
+    const hits = evaluateGoalRules('trigger:/|Settings', graph, rules, true);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].evidence_summary, 'goalId: audio_settings_open');
+  });
+
+  it('matches composite rule when all sub-predicates match', () => {
+    const graph = {
+      nodes: [
+        { id: 'trigger:/|Save', type: 'trigger', label: 'Save', route: '/', meta: {} },
+        { id: 'effect:dom:modal', type: 'effect', label: 'domEffect', route: '/', meta: { kind: 'domEffect', observed: true, detail: 'modal_open' } },
+        { id: 'effect:sw:pref', type: 'effect', label: 'storageWrite', route: '/', meta: { kind: 'storageWrite', observed: true, key: 'lokey.audio.vol' } },
+      ],
+      edges: [
+        { from: 'trigger:/|Save', to: 'effect:dom:modal', type: 'runtime_observed' },
+        { from: 'trigger:/|Save', to: 'effect:sw:pref', type: 'runtime_observed' },
+      ],
+    };
+    const rules = [{
+      id: 'settings_saved', label: 'Settings Saved', kind: 'composite', score: 7,
+      dom: { textRegex: 'modal' },
+      storage: { keyRegex: 'lokey\\.audio' },
+    }];
+    const hits = evaluateGoalRules('trigger:/|Save', graph, rules, true);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].rule_id, 'settings_saved');
+    assert.equal(hits[0].score, 7);
+    assert.equal(hits[0].confidence, 'observed');
+    assert.ok(hits[0].evidence_summary.includes('+'));
+  });
+
+  it('rejects composite rule when one sub-predicate fails', () => {
+    const graph = goalGraph('trigger:/|Save', {
+      id: 'effect:dom:modal', type: 'effect', label: 'domEffect', route: '/',
+      meta: { kind: 'domEffect', observed: true, detail: 'modal_open' },
+    });
+    // Composite requires storage + dom, but only dom is present
+    const rules = [{
+      id: 'settings_saved', label: 'Settings Saved', kind: 'composite', score: 7,
+      dom: { textRegex: 'modal' },
+      storage: { keyRegex: 'lokey\\.audio' },
+    }];
+    const hits = evaluateGoalRules('trigger:/|Save', graph, rules, true);
+    assert.equal(hits.length, 0);
+  });
+
+  it('returns unknown confidence when no runtime evidence exists', () => {
+    const graph = goalGraph('trigger:/|Save', {
+      id: 'effect:sw:key', type: 'effect', label: 'storageWrite', route: '/',
+      meta: { kind: 'storageWrite', observed: false, key: 'lokey.audio.vol' },
+    });
+    const rules = [{ id: 'audio_change', label: 'Change Audio', kind: 'storageWrite', storage: { keyRegex: 'lokey\\.audio' }, score: 5 }];
+    // runtimePresent=false → should still match structurally with unknown confidence
+    const hits = evaluateGoalRules('trigger:/|Save', graph, rules, false);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].confidence, 'unknown');
+  });
+
+  it('uses default score of 1 when not specified', () => {
+    const graph = goalGraph('trigger:/|Btn', {
+      id: 'effect:dom:toast', type: 'effect', label: 'domEffect', route: '/',
+      meta: { kind: 'domEffect', observed: true, detail: 'toast' },
+    });
+    const rules = [{ id: 'notify', label: 'Show Toast', kind: 'domEffect', dom: { textRegex: 'toast' } }];
+    const hits = evaluateGoalRules('trigger:/|Btn', graph, rules, true);
+    assert.equal(hits[0].score, 1);
+  });
+});
+
+// =============================================================================
+// deduplicateGoalHits (Stage 0E)
+// =============================================================================
+
+describe('deduplicateGoalHits', () => {
+  it('keeps highest-score hit per rule_id', () => {
+    const hits = [
+      { rule_id: 'a', rule_label: 'A', score: 3, evidence_summary: 'first', confidence: 'observed' },
+      { rule_id: 'a', rule_label: 'A', score: 5, evidence_summary: 'second', confidence: 'observed' },
+      { rule_id: 'b', rule_label: 'B', score: 1, evidence_summary: 'third', confidence: 'unknown' },
+    ];
+    const result = deduplicateGoalHits(hits);
+    assert.equal(result.length, 2);
+    assert.equal(result.find(h => h.rule_id === 'a').score, 5);
+    assert.equal(result.find(h => h.rule_id === 'b').score, 1);
+  });
+
+  it('returns empty for empty input', () => {
+    assert.deepEqual(deduplicateGoalHits([]), []);
+  });
+});
+
+// =============================================================================
+// inferTaskFlows + goalRules integration (Stage 0E Fix 3)
+// =============================================================================
+
+describe('inferTaskFlows with goalRules', () => {
+  // Reusable graph: trigger navigates, trigger has an observed storageWrite effect
+  function makeGoalRuleGraph({ key = 'lokey.audio.vol', observed = true } = {}) {
+    return {
+      version: '1.0.0', generated_at: '', stats: { total_nodes: 0, by_type: {}, total_edges: 0, by_edge_type: {}, orphan_features: 0, orphan_triggers: 0 },
+      nodes: [
+        { id: 'route:/', type: 'route', label: '/', route: '/', meta: {} },
+        { id: 'route:/play', type: 'route', label: '/play', route: '/play', meta: {} },
+        { id: 'trigger:/|Save', type: 'trigger', label: 'Save', route: '/', meta: { element: 'button', parent_nav: false, depth: 0 } },
+        { id: 'surface:save-btn', type: 'surface', label: 'Save', route: '/', meta: {} },
+        { id: 'effect:sw:key', type: 'effect', label: 'storageWrite', route: '/', meta: { kind: 'storageWrite', observed, key } },
+      ],
+      edges: [
+        { from: 'route:/', to: 'trigger:/|Save', type: 'contains' },
+        { from: 'trigger:/|Save', to: 'route:/play', type: 'navigates_to' },
+        { from: 'trigger:/|Save', to: 'surface:save-btn', type: 'maps_to' },
+        { from: 'surface:save-btn', to: 'effect:sw:key', type: 'produces' },
+      ],
+    };
+  }
+
+  it('step has goals_hit populated when goalRules match', () => {
+    const graph = makeGoalRuleGraph();
+    const rules = [{ id: 'audio_change', label: 'Change Audio', kind: 'storageWrite', storage: { keyRegex: 'lokey\\.audio' }, score: 5 }];
+    const flows = inferTaskFlows(graph, null, '', [], rules);
+    assert.ok(flows.length > 0);
+    const flow = flows[0];
+    const stepWithGoal = flow.steps.find(s => s.goals_hit?.length > 0);
+    assert.ok(stepWithGoal, 'At least one step should have goals_hit');
+    assert.equal(stepWithGoal.goals_hit[0].rule_id, 'audio_change');
+  });
+
+  it('flow has goals_reached and goal_score_total', () => {
+    const graph = makeGoalRuleGraph();
+    const rules = [{ id: 'audio_change', label: 'Change Audio', kind: 'storageWrite', storage: { keyRegex: 'lokey\\.audio' }, score: 5 }];
+    const flows = inferTaskFlows(graph, null, '', [], rules);
+    const flow = flows[0];
+    assert.ok(flow.goal_reached, 'Flow should reach goal via rule');
+    assert.ok(flow.goals_reached?.length > 0, 'goals_reached should be populated');
+    assert.equal(flow.goals_reached[0].rule_id, 'audio_change');
+    assert.equal(flow.goal_score_total, 5);
+  });
+
+  it('goal_reached is false when rules configured but no match', () => {
+    const graph = makeGoalRuleGraph({ key: 'app.theme' });
+    const rules = [{ id: 'audio_change', label: 'Change Audio', kind: 'storageWrite', storage: { keyRegex: '^lokey\\.audio\\.' }, score: 5 }];
+    const flows = inferTaskFlows(graph, null, '', [], rules);
+    const flow = flows[0];
+    // With goalRules configured, legacy effect-based is disabled, and rule doesn't match
+    assert.equal(flow.goal_reached, false);
+    assert.equal(flow.goals_reached, undefined);
+  });
+
+  it('legacy effect-based goal preserved when no goalRules', () => {
+    const graph = makeGoalRuleGraph();
+    // No goalRules → falls back to legacy binary effect check
+    const flows = inferTaskFlows(graph, null, '', [], []);
+    const flow = flows[0];
+    assert.ok(flow.goal_reached, 'Legacy effect-based goal should still work');
+    assert.equal(flow.goals_reached, undefined, 'goals_reached should not be set without rules');
+  });
+
+  it('goals show unknown confidence when no runtime evidence', () => {
+    const graph = makeGoalRuleGraph({ observed: false });
+    const rules = [{ id: 'audio_change', label: 'Change Audio', kind: 'storageWrite', storage: { keyRegex: 'lokey\\.audio' }, score: 5 }];
+    const flows = inferTaskFlows(graph, null, '', [], rules);
+    const flow = flows[0];
+    assert.ok(flow.goal_reached);
+    assert.equal(flow.goals_reached[0].confidence, 'unknown');
+  });
+
+  it('route-based goals still work alongside goalRules', () => {
+    const graph = makeGoalRuleGraph({ key: 'unrelated' });
+    // Rule won't match, but goalRoutes includes /play
+    const rules = [{ id: 'x', label: 'X', kind: 'storageWrite', storage: { keyRegex: '^nope$' }, score: 1 }];
+    const flows = inferTaskFlows(graph, null, '', ['/play'], rules);
+    const flow = flows[0];
+    assert.ok(flow.goal_reached, 'Route-based goal should still work');
+  });
+});
+
+// =============================================================================
+// renderTaskFlowsMd with goal rules (Stage 0E Fix 3)
+// =============================================================================
+
+describe('renderTaskFlowsMd with goals', () => {
+  it('renders goal labels in flow tags', () => {
+    const flows = [{
+      task_name: 'Save flow',
+      steps: [{ trigger_label: 'Save', route: '/', step_type: 'navigate', effects: [], is_destructive: false, goals_hit: [{ rule_id: 'a', rule_label: 'Save Settings', score: 3, evidence_summary: 'storageWrite: prefs', confidence: 'observed' }] }],
+      has_dead_end: false,
+      has_loop: false,
+      loop_type: null,
+      goal_reached: true,
+      has_destructive_step: false,
+      total_depth: 1,
+      goals_reached: [{ rule_id: 'a', rule_label: 'Save Settings', score: 3, evidence_summary: 'storageWrite: prefs', confidence: 'observed' }],
+      goal_score_total: 3,
+    }];
+    const md = renderTaskFlowsMd(flows);
+    assert.ok(md.includes('GOALS: Save Settings'), 'Should include goal label in tags');
+    assert.ok(md.includes('[score: 3]'), 'Should include score');
+    assert.ok(md.includes('**[Save Settings]**'), 'Should annotate step with goal hit');
+  });
+
+  it('renders legacy GOAL REACHED tag when no goals_reached', () => {
+    const flows = [{
+      task_name: 'Nav flow',
+      steps: [{ trigger_label: 'Docs', route: '/', step_type: 'navigate', effects: ['navigate'], is_destructive: false }],
+      has_dead_end: false,
+      has_loop: false,
+      loop_type: null,
+      goal_reached: true,
+      has_destructive_step: false,
+      total_depth: 1,
+    }];
+    const md = renderTaskFlowsMd(flows);
+    assert.ok(md.includes('GOAL REACHED'), 'Should show legacy tag');
+    assert.ok(!md.includes('GOALS:'), 'Should not show GOALS: prefix');
   });
 });
