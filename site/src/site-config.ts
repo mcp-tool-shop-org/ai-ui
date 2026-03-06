@@ -14,7 +14,7 @@ export const config: SiteConfig = {
     headlineAccent: 'Design diagnostics for SPAs.',
     description: 'Crawls your running app, reads your docs, and tells you exactly which features have no discoverable UI — and which UI surfaces aren\'t documented. Deterministic. No LLM required.',
     primaryCta: { href: '#usage', label: 'Get started' },
-    secondaryCta: { href: '#commands', label: 'View commands' },
+    secondaryCta: { href: 'handbook/', label: 'Read the Handbook' },
     previews: [
       { label: 'Install', code: 'git clone https://github.com/mcp-tool-shop-org/ai-ui.git\ncd ai-ui && npm install' },
       { label: 'Run', code: 'ai-ui atlas          # parse docs → feature catalog\nai-ui probe          # crawl UI → trigger graph\nai-ui diff           # match features ↔ triggers' },

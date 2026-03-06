@@ -1,56 +1,43 @@
 ---
-title: Handbook
-description: Everything you need to know about AI-UI.
+title: AI-UI Handbook
+description: Everything you need to know about AI-UI — automated design diagnostics for SPAs.
 sidebar:
   order: 0
 ---
 
-Welcome to the AI-UI handbook.
+**What is this?** AI-UI is a CLI that measures the gap between what your docs promise and what your UI delivers. It crawls your running app, parses your documentation, and tells you which features are invisible — deterministically, with no LLM required.
+
+**Who is it for?** Frontend developers and design teams who want to keep their UI honest. If your README says "ambient soundscapes" but no button leads there, AI-UI finds that.
+
+**Status:** Stable (v1.0.1)
+
+**TL;DR:** Point it at your docs and your dev server. It tells you what's buried, what's missing, and what to fix. `ai-ui stage0` runs the whole thing.
+
+---
+
+## The elevator pitch
+
+**The problem:** SPAs accumulate features faster than they accumulate navigation paths to those features. Docs promise capabilities that users can't find. Nobody notices until a support ticket arrives.
+
+**What AI-UI does better:** It doesn't guess. It builds a trigger graph from real browser interactions, fuzzy-matches features to triggers deterministically, and produces actionable verdicts: promote, keep, demote, merge.
+
+**What it doesn't do:** It doesn't redesign your app. It doesn't generate code. It doesn't use an LLM. It measures discoverability and tells you where the gaps are. You decide what to do about them.
+
+*If you only remember one thing about this repo, remember:* it closes the loop between documentation promises and UI reality.
+
+*This is not for:* visual regression testing, accessibility auditing, or performance profiling. Those are different tools.
+
+---
 
 ## What's inside
 
-AI-UI is a CLI tool that measures the gap between what your docs promise and what your UI delivers. It crawls your running app, parses your documentation, and produces deterministic design diagnostics — no LLM required.
+- **[Getting Started](/ai-ui/handbook/getting-started/)** — Install and first run
+- **[Common Tasks](/ai-ui/handbook/usage/)** — Pipeline recipes for everyday work
+- **[Commands](/ai-ui/handbook/commands/)** — Full CLI reference
+- **[Configuration](/ai-ui/handbook/configuration/)** — Config file, goal rules, feature aliases
+- **[Architecture](/ai-ui/handbook/architecture/)** — Mental model and design decisions
+- **[Operations](/ai-ui/handbook/operations/)** — CI integration, troubleshooting, debug bundles
+- **[Security](/ai-ui/handbook/security/)** — Threat model and safety posture
+- **[FAQ](/ai-ui/handbook/faq/)** — Common questions
 
-## Pipeline overview
-
-```
-atlas → probe → diff → graph → design-map
-                 ↓
-          runtime-effects → graph --with-runtime → design-map (with goals)
-                                                        ↓
-                                                   replay-pack → replay-diff
-```
-
-Each command reads the previous stage's output from `ai-ui-output/`. The pipeline is fully deterministic — same inputs produce same outputs.
-
-## Quick start
-
-```bash
-# 1. Clone and install
-git clone https://github.com/mcp-tool-shop-org/ai-ui.git
-cd ai-ui && npm install
-
-# 2. Configure your project
-# Create ai-ui.config.json in your project root
-
-# 3. Run the basic pipeline
-ai-ui stage0    # atlas + probe + diff
-ai-ui graph     # build trigger graph
-ai-ui design-map # generate diagnostics
-```
-
-## Configuration
-
-Create `ai-ui.config.json` in your project root:
-
-```json
-{
-  "docs": { "globs": ["README.md", "docs/*.md"] },
-  "probe": {
-    "baseUrl": "http://localhost:5173",
-    "routes": ["/", "/settings"]
-  }
-}
-```
-
-All fields are optional — sensible defaults are applied. See `cli/src/config.mjs` for the full schema.
+[Back to landing page](/ai-ui/)
