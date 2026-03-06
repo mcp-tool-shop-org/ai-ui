@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { detectLanguage, isAllowedExtension, scanRepo, filterRelevantFiles, findNearLine, extractContextWindow } from '../src/repo-scan.mjs';
 import { buildUnifiedDiff, buildFilesManifest, validateEdit } from '../src/git-diff.mjs';
 import { buildCoderPrompt, parseCoderResponse, CoderParseError } from '../src/ollama-coder.mjs';
+import { computeEditRank, rankEdits, rankSummary } from '../src/edit-rank.mjs';
 
 // =============================================================================
 // repo-scan tests
@@ -598,5 +599,243 @@ describe('Hands edit → diff round-trip', () => {
 
     const manifest = buildFilesManifest(edits);
     assert.equal(manifest[0].proposal_only, true);
+  });
+});
+
+// =============================================================================
+// Edit Ranking tests
+// =============================================================================
+
+describe('computeEditRank', () => {
+  /** @returns {import('../src/types.mjs').HandsEdit} */
+  function makeEdit(overrides = {}) {
+    return {
+      file: 'src/App.tsx',
+      find: '      <button onClick={handleClick}>',
+      replace: '      <button onClick={handleClick} data-aiui-safe="true">',
+      rationale: 'Add safe hook for probe',
+      artifact_trigger: 'add-aiui-hooks: Add data-aiui-safe attributes',
+      confidence: 0.95,
+      proposal_only: false,
+      ...overrides,
+    };
+  }
+
+  it('validated + single-line anchor scores high', () => {
+    const edit = makeEdit();
+    const rank = computeEditRank(edit);
+    // validated=0.60, single-line=0.20, small edit=0.10, no penalty
+    assert.ok(rank.rank_score >= 0.75, `expected high, got ${rank.rank_score}`);
+    assert.equal(rank.rank_bucket, 'high');
+    assert.equal(rank.risk_level, 'low');
+    assert.ok(rank.rank_reasons.some(r => r.includes('validated')));
+    assert.ok(rank.rank_reasons.some(r => r.includes('single-line')));
+  });
+
+  it('proposal_only scores lower than validated', () => {
+    const validated = makeEdit({ proposal_only: false });
+    const proposal = makeEdit({ proposal_only: true });
+    const vRank = computeEditRank(validated);
+    const pRank = computeEditRank(proposal);
+    assert.ok(vRank.rank_score > pRank.rank_score,
+      `validated ${vRank.rank_score} should beat proposal ${pRank.rank_score}`);
+    assert.ok(pRank.rank_score < 0.75, 'proposal should not be high-confidence');
+  });
+
+  it('validated + unique anchor outranks validated + repeated anchor', () => {
+    const fileContent = '  <button onClick={handleClick}>\n  <div>other stuff</div>';
+    const uniqueEdit = makeEdit({ find: '  <button onClick={handleClick}>' });
+    const repeatedEdit = makeEdit({ find: '<div>' }); // NOT unique if we add another
+    const fileWithDupes = '<div>a</div>\n<div>b</div>\n<button onClick={handleClick}>';
+
+    const uniqueRank = computeEditRank(uniqueEdit, fileContent);
+    const repeatedRank = computeEditRank(repeatedEdit, fileWithDupes);
+
+    assert.ok(uniqueRank.rank_score > repeatedRank.rank_score,
+      `unique ${uniqueRank.rank_score} should beat repeated ${repeatedRank.rank_score}`);
+  });
+
+  it('small insertion outranks large multi-line replacement', () => {
+    const smallEdit = makeEdit({
+      find: '<button>',
+      replace: '<button data-aiui-safe="true">',
+    });
+    const largeEdit = makeEdit({
+      find: '<div>\n  <span>\n    content\n  </span>\n</div>',
+      replace: '<section>\n  <article>\n    <p>new content</p>\n    <p>more content</p>\n  </article>\n</section>\n<!-- end -->',
+    });
+
+    const smallRank = computeEditRank(smallEdit);
+    const largeRank = computeEditRank(largeEdit);
+
+    assert.ok(smallRank.rank_score > largeRank.rank_score,
+      `small ${smallRank.rank_score} should beat large ${largeRank.rank_score}`);
+  });
+
+  it('penalizes edits touching auth/config files', () => {
+    const normalEdit = makeEdit();
+    const authEdit = makeEdit({ file: 'src/auth/login.tsx' });
+
+    const normalRank = computeEditRank(normalEdit);
+    const authRank = computeEditRank(authEdit);
+
+    assert.ok(normalRank.rank_score > authRank.rank_score,
+      `normal ${normalRank.rank_score} should beat auth ${authRank.rank_score}`);
+    assert.ok(authRank.rank_reasons.some(r => r.includes('config/auth/routing')));
+    assert.ok(authRank.risk_level === 'med' || authRank.risk_level === 'high');
+  });
+
+  it('penalizes code deletion', () => {
+    const addEdit = makeEdit();
+    const deleteEdit = makeEdit({
+      find: '<button onClick={handleClick}>Click me</button>',
+      replace: '',
+    });
+
+    const addRank = computeEditRank(addEdit);
+    const deleteRank = computeEditRank(deleteEdit);
+
+    assert.ok(addRank.rank_score > deleteRank.rank_score,
+      `add ${addRank.rank_score} should beat delete ${deleteRank.rank_score}`);
+    assert.equal(deleteRank.risk_level, 'high');
+    assert.ok(deleteRank.rank_reasons.some(r => r.includes('deletes')));
+  });
+
+  it('data-aiui edits get no business-logic penalty', () => {
+    const safeEdit = makeEdit({
+      find: '      <button onClick={handleClick}>',
+      replace: '      <button onClick={handleClick} data-aiui-safe="true">',
+    });
+
+    const rank = computeEditRank(safeEdit);
+    assert.ok(!rank.rank_reasons.some(r => r.includes('modifies existing code')));
+  });
+
+  it('Eyes confidence boosts score', () => {
+    const edit = makeEdit();
+    const provWithEyes = {
+      eyesAnnotations: [/** @type {any} */ ({
+        surface_id: 'trigger:/|btn',
+        label: 'Click me',
+        route: '/App',
+        confidence: 0.9,
+        visible_text: 'handleClick',
+      })],
+    };
+
+    const withEyes = computeEditRank(edit, undefined, provWithEyes);
+    const withoutEyes = computeEditRank(edit);
+
+    assert.ok(withEyes.rank_score >= withoutEyes.rank_score,
+      `with Eyes ${withEyes.rank_score} should >= without ${withoutEyes.rank_score}`);
+  });
+
+  it('goal rule target boosts score', () => {
+    const goalEdit = makeEdit({
+      artifact_trigger: 'goal-hooks: Add data-aiui-goal attributes',
+      replace: '<dialog data-aiui-goal="audio_open">',
+    });
+
+    const provWithGoals = { goalRuleIds: ['audio_open', 'audio_change'] };
+
+    const withGoals = computeEditRank(goalEdit, undefined, provWithGoals);
+    const withoutGoals = computeEditRank(goalEdit);
+
+    assert.ok(withGoals.rank_score > withoutGoals.rank_score,
+      `with goals ${withGoals.rank_score} should beat without ${withoutGoals.rank_score}`);
+  });
+
+  it('clamps score to 0..1', () => {
+    // Even with all bonuses, never exceeds 1
+    const edit = makeEdit();
+    const fileContent = '      <button onClick={handleClick}>';
+    const rank = computeEditRank(edit, fileContent, {
+      eyesAnnotations: [/** @type {any} */ ({ surface_id: 'x', label: 'x', route: '/App', confidence: 0.95, visible_text: 'handleClick' })],
+      goalRuleIds: ['audio'],
+      targets: [{ surfaceId: 'x', label: 'probe', file: 'src/App.tsx', nearLine: '<button' }],
+    });
+    assert.ok(rank.rank_score <= 1.0);
+    assert.ok(rank.rank_score >= 0.0);
+  });
+});
+
+describe('rankEdits', () => {
+  /** @returns {import('../src/types.mjs').HandsEdit} */
+  function makeEdit(overrides = {}) {
+    return {
+      file: 'src/App.tsx',
+      find: '<button>Click</button>',
+      replace: '<button data-aiui-safe="true">Click</button>',
+      rationale: 'Add safe hook',
+      artifact_trigger: 'add-aiui-hooks',
+      confidence: 0.9,
+      proposal_only: false,
+      ...overrides,
+    };
+  }
+
+  it('sorts edits by rank_score descending', () => {
+    const edits = [
+      makeEdit({ proposal_only: true, confidence: 0.3, rationale: 'weak edit' }),   // should rank lower
+      makeEdit({ proposal_only: false, confidence: 0.95, rationale: 'strong edit' }), // should rank higher
+    ];
+
+    const ranked = rankEdits(edits);
+    assert.equal(ranked.length, 2);
+    assert.ok(ranked[0].rank.rank_score >= ranked[1].rank.rank_score,
+      `first (${ranked[0].rank.rank_score}) should >= second (${ranked[1].rank.rank_score})`);
+    assert.equal(ranked[0].rationale, 'strong edit');
+    assert.equal(ranked[1].rationale, 'weak edit');
+  });
+
+  it('attaches rank metadata to each edit', () => {
+    const edits = [makeEdit()];
+    const ranked = rankEdits(edits);
+    assert.equal(ranked.length, 1);
+    assert.ok(ranked[0].rank);
+    assert.ok(typeof ranked[0].rank.rank_score === 'number');
+    assert.ok(['high', 'medium', 'low'].includes(ranked[0].rank.rank_bucket));
+    assert.ok(Array.isArray(ranked[0].rank.rank_reasons));
+    assert.ok(['low', 'med', 'high'].includes(ranked[0].rank.risk_level));
+  });
+
+  it('uses fileContents for anchor uniqueness', () => {
+    const fileContents = new Map([
+      ['src/App.tsx', '<button>Click</button>\n<div>other</div>'],
+    ]);
+    const edits = [makeEdit()];
+    const ranked = rankEdits(edits, fileContents);
+    assert.ok(ranked[0].rank.rank_reasons.some(r => r.includes('unique anchor')));
+  });
+
+  it('handles empty edit list', () => {
+    const ranked = rankEdits([]);
+    assert.equal(ranked.length, 0);
+  });
+});
+
+describe('rankSummary', () => {
+  it('counts buckets correctly', () => {
+    const ranked = [
+      { rank: { rank_score: 0.90, rank_bucket: /** @type {const} */ ('high'), rank_reasons: [], risk_level: /** @type {const} */ ('low') } },
+      { rank: { rank_score: 0.80, rank_bucket: /** @type {const} */ ('high'), rank_reasons: [], risk_level: /** @type {const} */ ('low') } },
+      { rank: { rank_score: 0.60, rank_bucket: /** @type {const} */ ('medium'), rank_reasons: [], risk_level: /** @type {const} */ ('med') } },
+      { rank: { rank_score: 0.30, rank_bucket: /** @type {const} */ ('low'), rank_reasons: [], risk_level: /** @type {const} */ ('low') } },
+    ];
+
+    const summary = rankSummary(/** @type {any} */ (ranked));
+    assert.equal(summary, '2 high-confidence, 1 medium, 1 low');
+  });
+
+  it('handles empty list', () => {
+    assert.equal(rankSummary([]), '0 high-confidence, 0 medium, 0 low');
+  });
+
+  it('handles all same bucket', () => {
+    const ranked = [
+      { rank: { rank_score: 0.90, rank_bucket: /** @type {const} */ ('high'), rank_reasons: [], risk_level: /** @type {const} */ ('low') } },
+      { rank: { rank_score: 0.85, rank_bucket: /** @type {const} */ ('high'), rank_reasons: [], risk_level: /** @type {const} */ ('low') } },
+    ];
+    assert.equal(rankSummary(/** @type {any} */ (ranked)), '2 high-confidence, 0 medium, 0 low');
   });
 });

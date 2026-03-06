@@ -21,6 +21,7 @@ import { checkOllamaAvailable, checkModelAvailable, OllamaError } from './ollama
 import { scanRepo, filterRelevantFiles, findNearLine, extractContextWindow } from './repo-scan.mjs';
 import { buildUnifiedDiff, buildFilesManifest, validateEdit } from './git-diff.mjs';
 import { buildCoderPrompt, parseCoderResponse, queryCoderForEdits, CoderParseError } from './ollama-coder.mjs';
+import { rankEdits, rankSummary } from './edit-rank.mjs';
 
 const VERSION = '1.0.0';
 
@@ -414,7 +415,7 @@ function buildCopyFixContext(featureMap, inventory, repoFiles) {
 // =============================================================================
 
 /**
- * Render the plan as markdown.
+ * Render the plan as markdown with ranked edit groups.
  *
  * @param {HandsReport} report
  * @returns {string}
@@ -430,8 +431,13 @@ function renderPlanMd(report) {
     `**Files touched:** ${report.stats.files_touched}`,
     `**Proposal-only:** ${report.stats.proposal_only_count}`,
     `**Avg confidence:** ${(report.stats.avg_confidence * 100).toFixed(1)}%`,
-    ``,
   ];
+
+  if (report.stats.rank_summary) {
+    lines.push(`**Rank:** ${report.stats.rank_summary}`);
+  }
+
+  lines.push(``);
 
   for (const plan of report.plans) {
     lines.push(`## Task: ${plan.task}`);
@@ -440,16 +446,81 @@ function renderPlanMd(report) {
     lines.push(``);
 
     if (plan.edits.length > 0) {
-      lines.push(`### Edits (${plan.edits.length})`);
-      lines.push(``);
-      lines.push(`| File | Confidence | Proposal Only | Rationale |`);
-      lines.push(`|------|-----------|---------------|-----------|`);
-      for (const edit of plan.edits) {
-        const conf = (edit.confidence * 100).toFixed(0) + '%';
-        const proposal = edit.proposal_only ? '⚠ yes' : '✓ no';
-        lines.push(`| ${edit.file} | ${conf} | ${proposal} | ${edit.rationale.slice(0, 60)} |`);
+      // Check if edits have rank metadata
+      const hasRanks = plan.edits.some(e => /** @type {any} */ (e).rank);
+
+      if (hasRanks) {
+        // Group edits by rank bucket for display
+        const ranked = /** @type {import('./edit-rank.mjs').RankedEdit[]} */ (plan.edits);
+        const high = ranked.filter(e => e.rank.rank_bucket === 'high');
+        const medium = ranked.filter(e => e.rank.rank_bucket === 'medium');
+        const low = ranked.filter(e => e.rank.rank_bucket === 'low');
+
+        if (plan.rank_summary) {
+          lines.push(`**Rank:** ${plan.rank_summary}`);
+          lines.push(``);
+        }
+
+        // Render each bucket
+        if (high.length > 0) {
+          lines.push(`### High confidence (${high.length})`);
+          lines.push(``);
+          for (const edit of high) {
+            const reasons = edit.rank.rank_reasons.filter(r => !r.startsWith('validated') && !r.startsWith('proposal')).slice(0, 3).join(', ');
+            const validTag = edit.proposal_only ? 'proposal' : 'validated';
+            lines.push(`- **Edit #${ranked.indexOf(edit) + 1}** — \`${edit.file}\`: ${edit.rationale.slice(0, 60)} _(${validTag}, score=${edit.rank.rank_score.toFixed(2)}${reasons ? ', ' + reasons : ''})_`);
+          }
+          lines.push(``);
+        }
+
+        if (medium.length > 0) {
+          lines.push(`### Medium confidence (${medium.length})`);
+          lines.push(``);
+          for (const edit of medium) {
+            const reasons = edit.rank.rank_reasons.filter(r => !r.startsWith('validated') && !r.startsWith('proposal')).slice(0, 3).join(', ');
+            const validTag = edit.proposal_only ? 'proposal' : 'validated';
+            lines.push(`- **Edit #${ranked.indexOf(edit) + 1}** — \`${edit.file}\`: ${edit.rationale.slice(0, 60)} _(${validTag}, score=${edit.rank.rank_score.toFixed(2)}${reasons ? ', ' + reasons : ''})_`);
+          }
+          lines.push(``);
+        }
+
+        if (low.length > 0) {
+          lines.push(`### Low confidence (${low.length})`);
+          lines.push(``);
+          for (const edit of low) {
+            const reasons = edit.rank.rank_reasons.filter(r => !r.startsWith('validated') && !r.startsWith('proposal')).slice(0, 3).join(', ');
+            const validTag = edit.proposal_only ? 'proposal' : 'validated';
+            lines.push(`- **Edit #${ranked.indexOf(edit) + 1}** — \`${edit.file}\`: ${edit.rationale.slice(0, 60)} _(${validTag}, score=${edit.rank.rank_score.toFixed(2)}${reasons ? ', ' + reasons : ''})_`);
+          }
+          lines.push(``);
+        }
+
+        // Also render the full table for reference
+        lines.push(`### All Edits (${plan.edits.length})`);
+        lines.push(``);
+        lines.push(`| # | File | Confidence | Rank | Bucket | Risk | Proposal Only | Rationale |`);
+        lines.push(`|---|------|-----------|------|--------|------|---------------|-----------|`);
+        for (let i = 0; i < ranked.length; i++) {
+          const edit = ranked[i];
+          const conf = (edit.confidence * 100).toFixed(0) + '%';
+          const proposal = edit.proposal_only ? '⚠ yes' : '✓ no';
+          const score = edit.rank.rank_score.toFixed(2);
+          lines.push(`| ${i + 1} | ${edit.file} | ${conf} | ${score} | ${edit.rank.rank_bucket} | ${edit.rank.risk_level} | ${proposal} | ${edit.rationale.slice(0, 50)} |`);
+        }
+        lines.push(``);
+      } else {
+        // Fallback: no ranking (backward compat)
+        lines.push(`### Edits (${plan.edits.length})`);
+        lines.push(``);
+        lines.push(`| File | Confidence | Proposal Only | Rationale |`);
+        lines.push(`|------|-----------|---------------|-----------|`);
+        for (const edit of plan.edits) {
+          const conf = (edit.confidence * 100).toFixed(0) + '%';
+          const proposal = edit.proposal_only ? '⚠ yes' : '✓ no';
+          lines.push(`| ${edit.file} | ${conf} | ${proposal} | ${edit.rationale.slice(0, 60)} |`);
+        }
+        lines.push(``);
       }
-      lines.push(``);
     } else {
       lines.push(`_No edits generated for this task._`);
       lines.push(``);
@@ -562,6 +633,63 @@ function renderVerifyMd(report) {
   lines.push(`- [ ] Re-run \`ai-ui design-map\` to verify metric improvements`);
 
   return lines.join('\n');
+}
+
+// =============================================================================
+// Ranked Manifest Builder
+// =============================================================================
+
+/**
+ * Build files.json manifest enriched with rank data.
+ * Falls back to basic manifest if edits have no rank metadata.
+ *
+ * @param {import('./types.mjs').HandsEdit[]} edits
+ * @returns {{ path: string, edits: number, lines_added: number, lines_removed: number, proposal_only: boolean, rank_score?: number, rank_bucket?: string, rank_reasons?: string[] }[]}
+ */
+function buildRankedManifest(edits) {
+  /** @type {Map<string, { edits: number, linesAdded: number, linesRemoved: number, proposalOnly: boolean, rankScores: number[], rankBuckets: string[], rankReasons: string[] }>} */
+  const byFile = new Map();
+
+  for (const edit of edits) {
+    const existing = byFile.get(edit.file) || { edits: 0, linesAdded: 0, linesRemoved: 0, proposalOnly: true, rankScores: [], rankBuckets: [], rankReasons: [] };
+    existing.edits++;
+    existing.linesRemoved += edit.find.split('\n').length;
+    existing.linesAdded += edit.replace.split('\n').length;
+    if (!edit.proposal_only) existing.proposalOnly = false;
+
+    // Add rank data if present
+    const ranked = /** @type {any} */ (edit);
+    if (ranked.rank) {
+      existing.rankScores.push(ranked.rank.rank_score);
+      existing.rankBuckets.push(ranked.rank.rank_bucket);
+      existing.rankReasons.push(...ranked.rank.rank_reasons);
+    }
+
+    byFile.set(edit.file, existing);
+  }
+
+  return [...byFile.entries()].map(([path, data]) => {
+    const base = {
+      path,
+      edits: data.edits,
+      lines_added: data.linesAdded,
+      lines_removed: data.linesRemoved,
+      proposal_only: data.proposalOnly,
+    };
+
+    // Add rank metadata if we have scores
+    if (data.rankScores.length > 0) {
+      const avgScore = data.rankScores.reduce((a, b) => a + b, 0) / data.rankScores.length;
+      // Best bucket from the file's edits
+      const bestBucket = data.rankBuckets.includes('high') ? 'high' :
+        data.rankBuckets.includes('medium') ? 'medium' : 'low';
+      // Deduplicate reasons
+      const uniqueReasons = [...new Set(data.rankReasons)];
+      return { ...base, rank_score: Math.round(avgScore * 100) / 100, rank_bucket: bestBucket, rank_reasons: uniqueReasons };
+    }
+
+    return base;
+  });
 }
 
 // =============================================================================
@@ -783,13 +911,40 @@ export async function runAiHands(config, flags) {
         break;
     }
 
+    // 5b. Rank edits for this task
+    /** @type {import('./edit-rank.mjs').RankedEdit[]} */
+    let rankedEdits = [];
+    if (edits.length > 0) {
+      // Build file contents map from the relevant files
+      const fileContentsMap = new Map(context.relevantFiles.map(f => [f.path, f.content]));
+
+      // Build provenance for ranking
+      /** @type {import('./edit-rank.mjs').RankProvenance} */
+      const provenance = {
+        fileContents: fileContentsMap,
+        targets: context.targets || [],
+        eyesAnnotations: task === 'add-aiui-hooks' ? eyesAnnotations : [],
+        goalRuleIds: (config.goalRules || []).map(r => r.id),
+      };
+
+      rankedEdits = rankEdits(edits, fileContentsMap, provenance);
+
+      if (flags.verbose) {
+        const summary = rankSummary(rankedEdits);
+        console.error(`    rank: ${summary}`);
+      }
+    }
+
+    const taskRankSummaryStr = rankedEdits.length > 0 ? rankSummary(rankedEdits) : undefined;
+
     plans.push({
       task,
       description: context.description,
-      edits,
+      edits: rankedEdits.length > 0 ? rankedEdits : edits, // use ranked order
       risks,
       verify_commands: verifyCommands,
       expected_deltas: expectedDeltas,
+      rank_summary: taskRankSummaryStr,
     });
   }
 
@@ -800,6 +955,12 @@ export async function runAiHands(config, flags) {
   const avgConfidence = confidences.length > 0
     ? confidences.reduce((a, b) => a + b, 0) / confidences.length
     : 0;
+
+  // Build overall rank summary
+  const allRanked = /** @type {import('./edit-rank.mjs').RankedEdit[]} */ (
+    allEdits.filter(e => /** @type {any} */ (e).rank)
+  );
+  const overallRankSummaryStr = allRanked.length > 0 ? rankSummary(allRanked) : undefined;
 
   /** @type {HandsReport} */
   const report = {
@@ -813,10 +974,11 @@ export async function runAiHands(config, flags) {
       files_touched: filesManifest.length,
       proposal_only_count: allEdits.filter(e => e.proposal_only).length,
       avg_confidence: avgConfidence,
+      rank_summary: overallRankSummaryStr,
     },
   };
 
-  // 7. Write outputs
+  // 7. Write outputs — build enriched manifest with rank data
   const outDir = flags.out || dirname(resolve(cwd, config.output.aiHandsPlanMd));
   mkdirSync(outDir, { recursive: true });
 
@@ -826,8 +988,8 @@ export async function runAiHands(config, flags) {
   const verifyPath = flags.out ? join(flags.out, 'hands.verify.md') : resolve(cwd, config.output.aiHandsVerifyMd);
 
   writeFileSync(planPath, renderPlanMd(report));
-  writeFileSync(diffPath, buildUnifiedDiff(allEdits));
-  writeFileSync(filesPath, JSON.stringify(filesManifest, null, 2));
+  writeFileSync(diffPath, buildUnifiedDiff(allEdits)); // edits already in rank order
+  writeFileSync(filesPath, JSON.stringify(buildRankedManifest(allEdits), null, 2));
   writeFileSync(verifyPath, renderVerifyMd(report));
 
   // 8. Summary
@@ -838,6 +1000,9 @@ export async function runAiHands(config, flags) {
   console.error(`  Files touched: ${filesManifest.length}`);
   console.error(`  Proposal-only: ${report.stats.proposal_only_count}`);
   console.error(`  Avg confidence: ${(avgConfidence * 100).toFixed(1)}%`);
+  if (overallRankSummaryStr) {
+    console.error(`  Rank: ${overallRankSummaryStr}`);
+  }
   console.error(`  Errors: ${totalErrors}`);
   console.error(`\n  Outputs:`);
   console.error(`    ${planPath}`);

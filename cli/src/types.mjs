@@ -913,6 +913,20 @@
  */
 
 /**
+ * Deterministic trustworthiness score for a single edit.
+ * @typedef {Object} EditRank
+ * @property {number} rank_score              - 0.0 to 1.0
+ * @property {'high'|'medium'|'low'} rank_bucket
+ * @property {string[]} rank_reasons          - Short strings explaining the score
+ * @property {'low'|'med'|'high'} risk_level
+ */
+
+/**
+ * A HandsEdit with ranking metadata attached.
+ * @typedef {HandsEdit & { rank: EditRank }} RankedHandsEdit
+ */
+
+/**
  * Plan for a single Hands task.
  * @typedef {Object} HandsPlan
  * @property {HandsTaskType} task
@@ -921,6 +935,7 @@
  * @property {string[]} risks            - Known risks or caveats
  * @property {string[]} verify_commands  - Commands to run after applying
  * @property {string[]} expected_deltas  - What metrics should improve
+ * @property {string} [rank_summary]     - e.g. "3 high-confidence, 1 medium, 0 low"
  */
 
 /**
@@ -931,7 +946,7 @@
  * @property {string} model
  * @property {string} repo_root          - Absolute path to target repo
  * @property {HandsPlan[]} plans
- * @property {{ total_edits: number, files_touched: number, proposal_only_count: number, avg_confidence: number }} stats
+ * @property {{ total_edits: number, files_touched: number, proposal_only_count: number, avg_confidence: number, rank_summary?: string }} stats
  */
 
 /**
