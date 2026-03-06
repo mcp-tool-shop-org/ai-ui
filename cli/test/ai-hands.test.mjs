@@ -1,7 +1,7 @@
 // @ts-check
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectLanguage, isAllowedExtension, scanRepo, filterRelevantFiles } from '../src/repo-scan.mjs';
+import { detectLanguage, isAllowedExtension, scanRepo, filterRelevantFiles, findNearLine, extractContextWindow } from '../src/repo-scan.mjs';
 import { buildUnifiedDiff, buildFilesManifest, validateEdit } from '../src/git-diff.mjs';
 import { buildCoderPrompt, parseCoderResponse, CoderParseError } from '../src/ollama-coder.mjs';
 
@@ -239,6 +239,50 @@ describe('buildCoderPrompt', () => {
     assert.ok(prompt.includes('### File: a.tsx'));
     assert.ok(prompt.includes('### File: b.tsx'));
   });
+
+  it('includes anchor_candidates in prompt contract', () => {
+    const prompt = buildCoderPrompt({
+      task: 'test',
+      description: 'test',
+      fileContext: [{ path: 'a.tsx', language: 'tsx', content: 'code' }],
+      artifactContext: '',
+      constraints: [],
+    });
+
+    assert.ok(prompt.includes('anchor_candidates'));
+    assert.ok(prompt.includes('single line'));
+  });
+
+  it('includes edit targets when provided', () => {
+    const prompt = buildCoderPrompt({
+      task: 'add-aiui-hooks',
+      description: 'Add hooks',
+      fileContext: [{ path: 'src/App.tsx', language: 'tsx', content: '<button>Click</button>' }],
+      artifactContext: '',
+      constraints: [],
+      targets: [
+        { surfaceId: 'trigger:/|btn', label: 'Click', file: 'src/App.tsx', nearLine: '      <button>Click</button>' },
+      ],
+    });
+
+    assert.ok(prompt.includes('## Edit Targets'));
+    assert.ok(prompt.includes('Surface "Click"'));
+    assert.ok(prompt.includes('src/App.tsx'));
+    assert.ok(prompt.includes('<button>Click</button>'));
+  });
+
+  it('omits edit targets section when no targets', () => {
+    const prompt = buildCoderPrompt({
+      task: 'test',
+      description: 'test',
+      fileContext: [{ path: 'a.tsx', language: 'tsx', content: 'code' }],
+      artifactContext: '',
+      constraints: [],
+      targets: [],
+    });
+
+    assert.ok(!prompt.includes('## Edit Targets'));
+  });
 });
 
 describe('parseCoderResponse', () => {
@@ -340,6 +384,158 @@ describe('CoderParseError', () => {
     assert.ok(err.message.includes('missing edits'));
     assert.equal(err.name, 'CoderParseError');
     assert.ok(err instanceof Error);
+  });
+});
+
+// =============================================================================
+// Integration — task context building
+// =============================================================================
+
+// =============================================================================
+// Anchor candidate resolution tests
+// =============================================================================
+
+describe('parseCoderResponse — anchor resolution', () => {
+  const validFiles = new Set(['src/App.tsx']);
+  const fileContents = new Map([
+    ['src/App.tsx', '  <div className="container">\n    <button onClick={handleClick}>\n      Click me\n    </button>\n  </div>'],
+  ]);
+
+  it('uses find when it matches uniquely', () => {
+    const raw = {
+      edits: [{
+        file: 'src/App.tsx',
+        find: '    <button onClick={handleClick}>',
+        anchor_candidates: ['    <button onClick={handleClick}>', '  <div className="container">'],
+        replace: '    <button onClick={handleClick} data-aiui-safe="true">',
+        rationale: 'Add hook',
+        confidence: 0.9,
+      }],
+    };
+
+    const result = parseCoderResponse(raw, 'test', validFiles, fileContents);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].find, '    <button onClick={handleClick}>');
+  });
+
+  it('falls back to anchor_candidates when find misses', () => {
+    const raw = {
+      edits: [{
+        file: 'src/App.tsx',
+        find: '<button onClick={handleSave}>', // wrong handler name — 0 occurrences
+        anchor_candidates: [
+          '<button onClick={handleSave}>', // also wrong
+          '    <button onClick={handleClick}>', // this one matches!
+          '  <div className="container">',
+        ],
+        replace: '    <button onClick={handleClick} data-aiui-safe="true">',
+        rationale: 'Add hook',
+        confidence: 0.9,
+      }],
+    };
+
+    const result = parseCoderResponse(raw, 'test', validFiles, fileContents);
+    assert.equal(result.length, 1);
+    // Should have resolved to the matching candidate
+    assert.equal(result[0].find, '    <button onClick={handleClick}>');
+  });
+
+  it('keeps original find when no candidates match', () => {
+    const raw = {
+      edits: [{
+        file: 'src/App.tsx',
+        find: '<totally wrong>',
+        anchor_candidates: ['<also wrong>', '<nope>'],
+        replace: 'whatever',
+        rationale: 'test',
+        confidence: 0.5,
+      }],
+    };
+
+    const result = parseCoderResponse(raw, 'test', validFiles, fileContents);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].find, '<totally wrong>'); // kept original
+  });
+
+  it('works without fileContents (backward compat)', () => {
+    const raw = {
+      edits: [{
+        file: 'src/App.tsx',
+        find: '<button>',
+        replace: '<button data-aiui-safe>',
+        rationale: 'test',
+        confidence: 0.8,
+      }],
+    };
+
+    // No fileContents passed — should still parse fine
+    const result = parseCoderResponse(raw, 'test', validFiles);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].find, '<button>');
+  });
+});
+
+// =============================================================================
+// Context window + nearLine tests
+// =============================================================================
+
+describe('findNearLine', () => {
+  const content = 'import React from "react";\n\nfunction App() {\n  return (\n    <div>\n      <button onClick={save}>Save</button>\n    </div>\n  );\n}';
+
+  it('finds line containing search term', () => {
+    const line = findNearLine(content, 'Save');
+    assert.ok(line);
+    assert.ok(line.includes('Save'));
+    assert.ok(line.includes('<button'));
+  });
+
+  it('returns null for missing term', () => {
+    assert.equal(findNearLine(content, 'DeleteAll'), null);
+  });
+
+  it('returns null for empty/short term', () => {
+    assert.equal(findNearLine(content, ''), null);
+    assert.equal(findNearLine(content, 'x'), null);
+  });
+
+  it('is case-insensitive', () => {
+    const line = findNearLine(content, 'save');
+    assert.ok(line);
+    assert.ok(line.includes('Save'));
+  });
+});
+
+describe('extractContextWindow', () => {
+  const lines = [];
+  for (let i = 0; i < 50; i++) lines.push(`line ${i}: content ${i}`);
+  const content = lines.join('\n');
+
+  it('windows around the matching line', () => {
+    const { windowed, lineOffset } = extractContextWindow(content, 'content 25', 5);
+    const windowedLines = windowed.split('\n');
+    // Should contain ~11 lines (5 before + match + 5 after)
+    assert.ok(windowedLines.length <= 11);
+    assert.ok(windowedLines.length >= 6);
+    assert.ok(windowed.includes('content 25'));
+    assert.ok(lineOffset >= 20);
+  });
+
+  it('returns full content if term not found', () => {
+    const { windowed } = extractContextWindow(content, 'notfound', 5);
+    assert.equal(windowed, content);
+  });
+
+  it('clamps to beginning of file', () => {
+    const { windowed, lineOffset } = extractContextWindow(content, 'content 2', 5);
+    // content 2 is line 2, window starts at max(0, 2-5) = 0
+    assert.equal(lineOffset, 0);
+    assert.ok(windowed.includes('content 2'));
+  });
+
+  it('clamps to end of file', () => {
+    const { windowed } = extractContextWindow(content, 'content 48', 5);
+    assert.ok(windowed.includes('content 48'));
+    assert.ok(windowed.includes('content 49')); // should include the last line
   });
 });
 

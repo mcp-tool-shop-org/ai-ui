@@ -18,7 +18,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fail } from './config.mjs';
 import { loadDesignMapInputs, buildSurfaceInventory, buildFeatureMap } from './design-map.mjs';
 import { checkOllamaAvailable, checkModelAvailable, OllamaError } from './ollama.mjs';
-import { scanRepo, filterRelevantFiles } from './repo-scan.mjs';
+import { scanRepo, filterRelevantFiles, findNearLine, extractContextWindow } from './repo-scan.mjs';
 import { buildUnifiedDiff, buildFilesManifest, validateEdit } from './git-diff.mjs';
 import { buildCoderPrompt, parseCoderResponse, queryCoderForEdits, CoderParseError } from './ollama-coder.mjs';
 
@@ -36,12 +36,14 @@ const VERSION = '1.0.0';
 /**
  * Build context for "add-aiui-hooks" task.
  * Identifies surfaces without data-aiui-safe attributes.
+ * When Eyes annotations are available, uses them to locate specific elements in specific files.
  *
  * @param {import('./types.mjs').DesignSurfaceInventory} inventory
  * @param {import('./types.mjs').ScannedFile[]} repoFiles
- * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[] } | null}
+ * @param {import('./types.mjs').EyesAnnotation[]} [eyesAnnotations]
+ * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[], targets: { surfaceId: string, label: string, file: string, nearLine?: string }[] } | null}
  */
-function buildHooksTaskContext(inventory, repoFiles) {
+function buildHooksTaskContext(inventory, repoFiles, eyesAnnotations) {
   // Find surfaces that could benefit from data-aiui-safe hooks
   const safeSurfaces = [];
   const unsafeSurfaces = [];
@@ -58,28 +60,98 @@ function buildHooksTaskContext(inventory, repoFiles) {
 
   if (unsafeSurfaces.length === 0 && safeSurfaces.length === 0) return null;
 
-  // Find files that contain button/link elements
-  const keywords = ['button', 'onClick', 'href', 'data-aiui', '<a ', '<button'];
-  const relevant = filterRelevantFiles(repoFiles, keywords, 10);
+  // Build search keywords from surfaces — including Eyes icon guesses
+  const surfaceKeywords = [];
+  for (const s of [...unsafeSurfaces, ...safeSurfaces]) {
+    if (s.label) surfaceKeywords.push(s.label);
+    if (s.role) surfaceKeywords.push(s.role);
+  }
+
+  // Enrich with Eyes data: use icon_guess and nearby_context as search terms
+  if (eyesAnnotations && eyesAnnotations.length > 0) {
+    for (const ann of eyesAnnotations) {
+      if (ann.icon_guess && ann.icon_guess !== 'none') surfaceKeywords.push(ann.icon_guess);
+      if (ann.nearby_context) surfaceKeywords.push(ann.nearby_context);
+      if (ann.visible_text) surfaceKeywords.push(ann.visible_text);
+    }
+  }
+
+  // Add standard element keywords
+  surfaceKeywords.push('button', 'onClick', 'href', 'data-aiui', '<a ', '<button');
+
+  const relevant = filterRelevantFiles(repoFiles, surfaceKeywords, 10);
   if (relevant.length === 0) return null;
 
-  const surfaceList = unsafeSurfaces.slice(0, 15).map(s =>
-    `- "${s.label}" (${s.role}, ${s.location_group}, safety: ${s.safety})`
-  ).join('\n');
+  // Build targeted "where-rendered" mapping: surface → file + nearLine
+  /** @type {{ surfaceId: string, label: string, file: string, nearLine?: string }[]} */
+  const targets = [];
+  const allSurfaces = [...unsafeSurfaces.slice(0, 20)];
+
+  for (const surface of allSurfaces) {
+    // Search each relevant file for this surface's label or Eyes annotation
+    const searchTerms = [surface.label];
+
+    // Add Eyes-derived search terms for this surface
+    if (eyesAnnotations) {
+      const surfaceId = surface.linked_triggers?.[0] || `surface:${surface.route}|${surface.label}`;
+      const ann = eyesAnnotations.find(a => a.surface_id === surfaceId);
+      if (ann) {
+        if (ann.icon_guess && ann.icon_guess !== 'none') searchTerms.push(ann.icon_guess);
+        if (ann.visible_text) searchTerms.push(ann.visible_text);
+      }
+    }
+
+    for (const term of searchTerms) {
+      if (!term || term.length < 2) continue;
+      for (const file of relevant) {
+        const nearLine = findNearLine(file.content, term);
+        if (nearLine) {
+          targets.push({
+            surfaceId: surface.linked_triggers?.[0] || `surface:${surface.route}|${surface.label}`,
+            label: surface.label || term,
+            file: file.path,
+            nearLine,
+          });
+          break; // found the file for this surface, move on
+        }
+      }
+      if (targets.some(t => t.label === (surface.label || term))) break; // already found
+    }
+  }
+
+  // Window file contents around targets to reduce prompt size
+  const windowedFiles = relevant.map(f => {
+    const fileTargets = targets.filter(t => t.file === f.path);
+    if (fileTargets.length > 0 && f.size > 2000) {
+      // Window around the first target for this file
+      const { windowed } = extractContextWindow(f.content, fileTargets[0].nearLine || fileTargets[0].label, 12);
+      return { ...f, content: windowed };
+    }
+    return f;
+  });
+
+  const surfaceList = unsafeSurfaces.slice(0, 15).map(s => {
+    const target = targets.find(t => t.label === s.label);
+    const fileHint = target ? ` → found in \`${target.file}\`` : '';
+    return `- "${s.label}" (${s.role}, ${s.location_group}, safety: ${s.safety})${fileHint}`;
+  }).join('\n');
 
   return {
     description: `Add data-aiui-safe="true" attributes to interactive elements that are safe for automated testing. ` +
-      `Found ${unsafeSurfaces.length} surface(s) without the safe attribute.`,
+      `Found ${unsafeSurfaces.length} surface(s) without the safe attribute.` +
+      (targets.length > 0 ? ` Located ${targets.length} target(s) in source files.` : ''),
     artifactContext: `## Surfaces needing hooks\n${surfaceList}\n\n` +
       `The data-aiui-safe attribute tells AI-UI's probe that this element is safe to click during automated crawling. ` +
       `Only add it to elements that perform non-destructive actions (navigation, toggling UI, opening dialogs).`,
-    relevantFiles: relevant,
+    relevantFiles: windowedFiles,
     constraints: [
       'Only add data-aiui-safe="true" to elements that perform NON-DESTRUCTIVE actions',
       'Never add data-aiui-safe to delete, remove, reset, logout, or billing buttons',
       'Preserve existing attributes — add the new attribute alongside them',
       'If the element has dynamic behavior (e.g., conditional delete), do NOT add the attribute',
+      'Use the exact line from "Edit Targets" as your anchor — copy it precisely',
     ],
+    targets,
   };
 }
 
@@ -89,7 +161,7 @@ function buildHooksTaskContext(inventory, repoFiles) {
  *
  * @param {import('./types.mjs').DesignFeatureMap} featureMap
  * @param {import('./types.mjs').ScannedFile[]} repoFiles
- * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[] } | null}
+ * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[], targets: { surfaceId: string, label: string, file: string, nearLine?: string }[] } | null}
  */
 function buildSurfaceSettingsContext(featureMap, repoFiles) {
   // Find features that are documented but poorly surfaced
@@ -103,10 +175,6 @@ function buildSurfaceSettingsContext(featureMap, repoFiles) {
 
   if (needsSurfacing.length === 0) return null;
 
-  const featureList = needsSurfacing.slice(0, 10).map(f =>
-    `- "${f.feature_name}" (action: ${f.recommended_action}, entry points: ${f.entry_points.length}, discoverability: ${f.discoverability.toFixed(2)})`
-  ).join('\n');
-
   // Gather keywords from feature names
   const keywords = needsSurfacing.flatMap(f =>
     f.feature_name.toLowerCase().split(/[\s\-_,.()/]+/).filter(w => w.length > 3)
@@ -115,20 +183,66 @@ function buildSurfaceSettingsContext(featureMap, repoFiles) {
   const relevant = filterRelevantFiles(repoFiles, keywords, 10);
   if (relevant.length === 0) return null;
 
+  // Build targets: locate features in source files
+  /** @type {{ surfaceId: string, label: string, file: string, nearLine?: string }[]} */
+  const targets = [];
+  for (const feature of needsSurfacing.slice(0, 10)) {
+    const searchTerms = [
+      feature.feature_name,
+      ...feature.entry_points.map(ep => ep.label),
+    ].filter(Boolean);
+
+    for (const term of searchTerms) {
+      if (term.length < 3) continue;
+      for (const file of relevant) {
+        const nearLine = findNearLine(file.content, term);
+        if (nearLine) {
+          targets.push({
+            surfaceId: feature.feature_id,
+            label: term,
+            file: file.path,
+            nearLine,
+          });
+          break;
+        }
+      }
+      if (targets.some(t => t.surfaceId === feature.feature_id)) break;
+    }
+  }
+
+  // Window files around targets
+  const windowedFiles = relevant.map(f => {
+    const fileTargets = targets.filter(t => t.file === f.path);
+    if (fileTargets.length > 0 && f.size > 2000) {
+      const { windowed } = extractContextWindow(f.content, fileTargets[0].nearLine || fileTargets[0].label, 12);
+      return { ...f, content: windowed };
+    }
+    return f;
+  });
+
+  const featureList = needsSurfacing.slice(0, 10).map(f => {
+    const target = targets.find(t => t.surfaceId === f.feature_id);
+    const fileHint = target ? ` → in \`${target.file}\`` : '';
+    return `- "${f.feature_name}" (action: ${f.recommended_action}, entry points: ${f.entry_points.length}, discoverability: ${f.discoverability.toFixed(2)})${fileHint}`;
+  }).join('\n');
+
   return {
     description: `Improve UI surfacing for ${needsSurfacing.length} feature(s) that are documented but hard to find. ` +
-      `These features exist in the docs but lack prominent UI entry points.`,
+      `These features exist in the docs but lack prominent UI entry points.` +
+      (targets.length > 0 ? ` Located ${targets.length} target(s) in source files.` : ''),
     artifactContext: `## Features needing better surfacing\n${featureList}\n\n` +
       `Each feature above is documented in the project README or docs, but users can't easily find it in the UI. ` +
       `Possible improvements: add aria-label, tooltip, or heading text that matches the documentation.`,
-    relevantFiles: relevant,
+    relevantFiles: windowedFiles,
     constraints: [
       'Do NOT create new components or pages — only improve existing elements',
       'Add aria-label or title attributes to help discoverability',
       'Add data-aiui-goal attributes where a feature completion can be detected',
       'Keep changes minimal — one attribute addition per element at most',
       'Match the existing code style (indentation, quotes, semicolons)',
+      'Use the exact line from "Edit Targets" as your anchor — copy it precisely',
     ],
+    targets,
   };
 }
 
@@ -139,7 +253,7 @@ function buildSurfaceSettingsContext(featureMap, repoFiles) {
  * @param {import('./types.mjs').DesignSurfaceInventory} inventory
  * @param {import('./types.mjs').AiUiConfig} config
  * @param {import('./types.mjs').ScannedFile[]} repoFiles
- * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[] } | null}
+ * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[], targets: { surfaceId: string, label: string, file: string, nearLine?: string }[] } | null}
  */
 function buildGoalHooksContext(inventory, config, repoFiles) {
   const goalRules = config.goalRules || [];
@@ -161,18 +275,54 @@ function buildGoalHooksContext(inventory, config, repoFiles) {
   const relevant = filterRelevantFiles(repoFiles, keywords, 10);
   if (relevant.length === 0) return null;
 
+  // Build targets: locate goal-related elements
+  /** @type {{ surfaceId: string, label: string, file: string, nearLine?: string }[]} */
+  const targets = [];
+  for (const rule of goalRules) {
+    const searchTerms = [rule.label, rule.dom?.textRegex, rule.id].filter(Boolean);
+    for (const term of searchTerms) {
+      if (term.length < 2) continue;
+      for (const file of relevant) {
+        const nearLine = findNearLine(file.content, term);
+        if (nearLine) {
+          targets.push({
+            surfaceId: `goal:${rule.id}`,
+            label: rule.label,
+            file: file.path,
+            nearLine,
+          });
+          break;
+        }
+      }
+      if (targets.some(t => t.surfaceId === `goal:${rule.id}`)) break;
+    }
+  }
+
+  // Window files around targets
+  const windowedFiles = relevant.map(f => {
+    const fileTargets = targets.filter(t => t.file === f.path);
+    if (fileTargets.length > 0 && f.size > 2000) {
+      const { windowed } = extractContextWindow(f.content, fileTargets[0].nearLine || fileTargets[0].label, 12);
+      return { ...f, content: windowed };
+    }
+    return f;
+  });
+
   return {
-    description: `Add data-aiui-goal attributes to elements that represent task completion for ${goalRules.length} configured goal rule(s).`,
+    description: `Add data-aiui-goal attributes to elements that represent task completion for ${goalRules.length} configured goal rule(s).` +
+      (targets.length > 0 ? ` Located ${targets.length} target(s) in source files.` : ''),
     artifactContext: `## Goal Rules\n${ruleList}\n\n` +
       `The data-aiui-goal attribute marks DOM elements that represent successful task completion. ` +
       `When AI-UI's probe sees this attribute, it can verify that a user workflow reached its intended goal.`,
-    relevantFiles: relevant,
+    relevantFiles: windowedFiles,
     constraints: [
       'Add data-aiui-goal="<rule-id>" to elements that appear when the goal is achieved',
       'Common placements: success dialogs, confirmation panels, result displays',
       'Only add to elements that are shown AFTER the action completes, not to the trigger itself',
       'Preserve all existing attributes',
+      'Use the exact line from "Edit Targets" as your anchor — copy it precisely',
     ],
+    targets,
   };
 }
 
@@ -183,7 +333,7 @@ function buildGoalHooksContext(inventory, config, repoFiles) {
  * @param {import('./types.mjs').DesignFeatureMap} featureMap
  * @param {import('./types.mjs').DesignSurfaceInventory} inventory
  * @param {import('./types.mjs').ScannedFile[]} repoFiles
- * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[] } | null}
+ * @returns {{ description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[], targets: { surfaceId: string, label: string, file: string, nearLine?: string }[] } | null}
  */
 function buildCopyFixContext(featureMap, inventory, repoFiles) {
   // Find features where the label doesn't match the doc name
@@ -192,11 +342,6 @@ function buildCopyFixContext(featureMap, inventory, repoFiles) {
   );
 
   if (mismatches.length === 0) return null;
-
-  const mismatchList = mismatches.slice(0, 10).map(f => {
-    const entryLabel = f.entry_points[0]?.label || '(unknown)';
-    return `- Doc name: "${f.feature_name}" → UI label: "${entryLabel}" (action: rename)`;
-  }).join('\n');
 
   // Get keywords from mismatched labels
   const keywords = mismatches.flatMap(f => [
@@ -207,20 +352,60 @@ function buildCopyFixContext(featureMap, inventory, repoFiles) {
   const relevant = filterRelevantFiles(repoFiles, keywords, 10);
   if (relevant.length === 0) return null;
 
+  // Build targets
+  /** @type {{ surfaceId: string, label: string, file: string, nearLine?: string }[]} */
+  const targets = [];
+  for (const feature of mismatches.slice(0, 10)) {
+    const entryLabel = feature.entry_points[0]?.label;
+    if (!entryLabel || entryLabel.length < 2) continue;
+    for (const file of relevant) {
+      const nearLine = findNearLine(file.content, entryLabel);
+      if (nearLine) {
+        targets.push({
+          surfaceId: feature.feature_id,
+          label: entryLabel,
+          file: file.path,
+          nearLine,
+        });
+        break;
+      }
+    }
+  }
+
+  // Window files around targets
+  const windowedFiles = relevant.map(f => {
+    const fileTargets = targets.filter(t => t.file === f.path);
+    if (fileTargets.length > 0 && f.size > 2000) {
+      const { windowed } = extractContextWindow(f.content, fileTargets[0].nearLine || fileTargets[0].label, 12);
+      return { ...f, content: windowed };
+    }
+    return f;
+  });
+
+  const mismatchList = mismatches.slice(0, 10).map(f => {
+    const entryLabel = f.entry_points[0]?.label || '(unknown)';
+    const target = targets.find(t => t.surfaceId === f.feature_id);
+    const fileHint = target ? ` → in \`${target.file}\`` : '';
+    return `- Doc name: "${f.feature_name}" → UI label: "${entryLabel}" (action: rename)${fileHint}`;
+  }).join('\n');
+
   return {
     description: `Fix ${mismatches.length} UI label(s) that don't match the documented feature names. ` +
-      `Consistent terminology improves discoverability.`,
+      `Consistent terminology improves discoverability.` +
+      (targets.length > 0 ? ` Located ${targets.length} target(s) in source files.` : ''),
     artifactContext: `## Label mismatches\n${mismatchList}\n\n` +
       `The documentation uses specific names for features, but the UI uses different labels. ` +
       `Aligning UI labels with documentation helps users find features mentioned in docs.`,
-    relevantFiles: relevant,
+    relevantFiles: windowedFiles,
     constraints: [
       'Only rename labels where the doc name is clearly better for the user',
       'Preserve meaning — if the current label is more descriptive, skip it',
       'Update aria-label and title attributes if they exist',
       'Do NOT rename variables or function names — only user-facing text',
       'Match the existing quote style (single vs double) in the file',
+      'Use the exact line from "Edit Targets" as your anchor — copy it precisely',
     ],
+    targets,
   };
 }
 
@@ -452,15 +637,30 @@ export async function runAiHands(config, flags) {
   }
   console.error(`Found ${repoFiles.length} editable source file(s).`);
 
+  // 3b. Load Eyes annotations if available (for targeted hooks)
+  /** @type {import('./types.mjs').EyesAnnotation[]} */
+  let eyesAnnotations = [];
+  const eyesPath = resolve(cwd, config.output.aiEyesJson);
+  if (existsSync(eyesPath)) {
+    try {
+      /** @type {import('./types.mjs').AiEyesReport} */
+      const eyesReport = JSON.parse(readFileSync(eyesPath, 'utf-8'));
+      eyesAnnotations = eyesReport.annotations.filter(a => a.confidence > 0);
+      console.error(`Loaded ${eyesAnnotations.length} Eyes annotation(s) for targeting.`);
+    } catch (err) {
+      console.error(`  (Eyes data not loaded: ${err.message})`);
+    }
+  }
+
   // 4. Build task contexts
-  /** @type {{ task: HandsTaskType, context: { description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[] } }[]} */
+  /** @type {{ task: HandsTaskType, context: { description: string, artifactContext: string, relevantFiles: import('./types.mjs').ScannedFile[], constraints: string[], targets?: { surfaceId: string, label: string, file: string, nearLine?: string }[] } }[]} */
   const taskContexts = [];
 
   for (const task of requestedTasks) {
     let context = null;
     switch (task) {
       case 'add-aiui-hooks':
-        context = buildHooksTaskContext(inventory, repoFiles);
+        context = buildHooksTaskContext(inventory, repoFiles, eyesAnnotations);
         break;
       case 'surface-settings':
         context = buildSurfaceSettingsContext(featureMap, repoFiles);
@@ -515,6 +715,7 @@ export async function runAiHands(config, flags) {
           fileContext,
           artifactContext: context.artifactContext,
           constraints: context.constraints,
+          targets: context.targets,
         }, { model, timeout, verbose: flags.verbose });
 
         // Convert coder edits to HandsEdit format + validate

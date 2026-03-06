@@ -176,3 +176,65 @@ export function filterRelevantFiles(files, keywords, maxFiles = 20) {
     .slice(0, maxFiles)
     .map(s => s.file);
 }
+
+/**
+ * Find the line in a file's content that contains the given search term.
+ * Returns the matching line (trimmed) or null if not found.
+ * Used to build "nearLine" targets that give the coder model an anchor.
+ *
+ * @param {string} content - Full file content
+ * @param {string} searchTerm - Label, route, or other search term
+ * @returns {string|null}
+ */
+export function findNearLine(content, searchTerm) {
+  if (!searchTerm || searchTerm.length < 2) return null;
+  const lower = searchTerm.toLowerCase();
+  const lines = content.split('\n');
+  for (const line of lines) {
+    if (line.toLowerCase().includes(lower)) {
+      return line;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract a context window (±N lines) around a search term within file content.
+ * Returns the windowed content or the original if the term is not found.
+ * This reduces prompt size while giving the model focused, real code to anchor against.
+ *
+ * @param {string} content - Full file content
+ * @param {string} searchTerm - Label, route, or other search term
+ * @param {number} [contextLines=12] - Lines above and below the match to include
+ * @returns {{ windowed: string, lineOffset: number }}
+ */
+export function extractContextWindow(content, searchTerm, contextLines = 12) {
+  if (!searchTerm || searchTerm.length < 2) {
+    return { windowed: content, lineOffset: 0 };
+  }
+
+  const lower = searchTerm.toLowerCase();
+  const lines = content.split('\n');
+
+  // Find the first matching line
+  let matchIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].toLowerCase().includes(lower)) {
+      matchIndex = i;
+      break;
+    }
+  }
+
+  if (matchIndex === -1) {
+    return { windowed: content, lineOffset: 0 };
+  }
+
+  const start = Math.max(0, matchIndex - contextLines);
+  const end = Math.min(lines.length, matchIndex + contextLines + 1);
+  const windowedLines = lines.slice(start, end);
+
+  return {
+    windowed: windowedLines.join('\n'),
+    lineOffset: start,
+  };
+}
