@@ -27,6 +27,7 @@ Commands:
   replay-diff  Compare two replay packs (replay-diff.json/.md/.summary.json)
   design-map   Generate design artifacts (surface inventory, feature map, task flows, IA proposal)
   ai-suggest   Use Ollama to match doc features → UI surfaces and emit alias patches
+  ai-eyes      Use LLaVA to visually identify icon-only and text-poor surfaces
   stage0       Run atlas → probe → diff in sequence
 
 Options:
@@ -55,8 +56,9 @@ Options:
   --replay <path>   (verify) Replay from a .replay.json pack instead of live artifacts
   --no-redact       (replay-pack) Disable URL/storage redaction
   --top <n>         (replay-diff) Limit displayed items per section (default: 10)
-  --model <name>    (ai-suggest) Ollama model name (default: qwen2.5:14b)
+  --model <name>    (ai-suggest/ai-eyes) Ollama model name
   --min-confidence <n> (ai-suggest) Minimum confidence threshold 0.0-1.0 (default: 0.55)
+  --eyes <path>     (ai-suggest) Path to eyes.json for visual enrichment
   --memory-strict   Fail if memory files don't parse
   --help            Show this help
   --version         Show version
@@ -170,6 +172,11 @@ async function main() {
       await runAiSuggest(config, flags);
       break;
     }
+    case 'ai-eyes': {
+      const { runAiEyes } = await import('../src/ai-eyes.mjs');
+      await runAiEyes(config, flags);
+      break;
+    }
     case 'stage0': {
       const { runStage0 } = await import('../src/stage0.mjs');
       await runStage0(config, flags);
@@ -186,7 +193,7 @@ async function main() {
  * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean, runPipeline: boolean, strict: boolean, json: boolean, write: boolean, force: boolean, noMemory: boolean, memoryStrict: boolean }}
  */
 function parseFlags(args) {
-  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined, gate: undefined, minCoverage: undefined, replay: undefined, noRedact: false, top: undefined, model: undefined, minConfidence: undefined };
+  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined, gate: undefined, minCoverage: undefined, replay: undefined, noRedact: false, top: undefined, model: undefined, minConfidence: undefined, eyes: undefined };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--config' && args[i + 1]) {
@@ -254,6 +261,8 @@ function parseFlags(args) {
       flags.model = args[++i];
     } else if (a === '--min-confidence' && args[i + 1]) {
       flags.minConfidence = parseFloat(args[++i]);
+    } else if (a === '--eyes' && args[i + 1]) {
+      flags.eyes = args[++i];
     }
   }
   return flags;
@@ -267,7 +276,7 @@ function parseFlags(args) {
 function collectPositionalArgs(args) {
   const valueFlags = new Set(['--config', '--from', '--out', '--format', '--max-fixes',
     '--max-blockers', '--max-warnings', '--url', '--actions-top', '--gate',
-    '--min-coverage', '--replay', '--top', '--model', '--min-confidence']);
+    '--min-coverage', '--replay', '--top', '--model', '--min-confidence', '--eyes']);
   const result = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith('-')) {

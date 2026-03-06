@@ -214,7 +214,7 @@ function renderSuggestMd(report) {
  * Main command handler for ai-suggest.
  *
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ from?: string, out?: string, replay?: string, verbose?: boolean, dryRun?: boolean, model?: string, top?: number, minConfidence?: number, format?: string }} flags
+ * @param {{ from?: string, out?: string, replay?: string, verbose?: boolean, dryRun?: boolean, model?: string, top?: number, minConfidence?: number, format?: string, eyes?: string }} flags
  */
 export async function runAiSuggest(config, flags) {
   const cwd = process.cwd();
@@ -266,6 +266,40 @@ export async function runAiSuggest(config, flags) {
 
   // 4. Flatten surface inventory for candidate matching
   const allSurfaces = flattenSurfaces(inventory);
+
+  // 4b. Enrich surfaces with Eyes annotations if provided
+  /** @type {Map<string, import('./types.mjs').EyesAnnotation>} */
+  const eyesMap = new Map();
+  if (flags.eyes) {
+    const eyesPath = resolve(cwd, flags.eyes);
+    if (existsSync(eyesPath)) {
+      try {
+        /** @type {import('./types.mjs').AiEyesReport} */
+        const eyesReport = JSON.parse(readFileSync(eyesPath, 'utf-8'));
+        for (const ann of eyesReport.annotations) {
+          if (ann.confidence > 0) eyesMap.set(ann.surface_id, ann);
+        }
+        console.error(`Loaded ${eyesMap.size} Eyes annotations from ${flags.eyes}`);
+
+        // Enrich surface labels with Eyes icon guesses
+        for (const surface of allSurfaces) {
+          const ann = eyesMap.get(surface.surface_id);
+          if (ann) {
+            // Append icon_guess and nearby_context to help Brain match
+            if (ann.icon_guess && ann.icon_guess !== 'none') {
+              surface.aria_label = [surface.aria_label, ann.icon_guess, ann.nearby_context]
+                .filter(Boolean).join(' | ');
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`⚠ Failed to load Eyes data: ${err.message}`);
+      }
+    } else {
+      console.error(`⚠ Eyes file not found: ${eyesPath}`);
+    }
+  }
+
   console.error(`${allSurfaces.length} surfaces available for matching.`);
 
   // 5. Query Brain for each feature

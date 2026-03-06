@@ -56,6 +56,10 @@ const DEFAULTS = {
     aiSuggestJson: 'ai-ui-output/ai-suggest.json',
     aiSuggestPatchJson: 'ai-ui-output/ai-suggest.patch.json',
     aiSuggestMd: 'ai-ui-output/ai-suggest.md',
+    aiEyesJson: 'ai-ui-output/eyes.json',
+    aiEyesPatchJson: 'ai-ui-output/eyes.patch.json',
+    aiEyesMd: 'ai-ui-output/eyes.md',
+    aiEyesScreenshots: 'ai-ui-output/eyes-screenshots',
   },
   verify: {
     maxOrphanRatio: 0.25,
@@ -93,6 +97,12 @@ const DEFAULTS = {
     top: 5,
     minConfidence: 0.55,
     timeout: 60000,
+  },
+  aiEyes: {
+    model: 'llava:13b',
+    timeout: 90000,
+    maxElements: 30,
+    saveScreenshots: true,
   },
 };
 

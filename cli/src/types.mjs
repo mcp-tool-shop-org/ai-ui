@@ -6,7 +6,7 @@
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string, basePath: string, goalRoutes: string[] }} probe
  * @property {Record<string, string[]>} featureAliases
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string, replayPack: string, replayDiff: string, replayDiffReport: string, replayDiffSummary: string, designSurfaceInventory: string, designSurfaceInventoryReport: string, designFeatureMap: string, designFeatureMapReport: string, designTaskFlows: string, designIAProposal: string, aiSuggestJson: string, aiSuggestPatchJson: string, aiSuggestMd: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string, replayPack: string, replayDiff: string, replayDiffReport: string, replayDiffSummary: string, designSurfaceInventory: string, designSurfaceInventoryReport: string, designFeatureMap: string, designFeatureMapReport: string, designTaskFlows: string, designIAProposal: string, aiSuggestJson: string, aiSuggestPatchJson: string, aiSuggestMd: string, aiEyesJson: string, aiEyesPatchJson: string, aiEyesMd: string, aiEyesScreenshots: string }} output
  * @property {VerifyConfig} verify
  * @property {BaselineConfig} baseline
  * @property {MemoryConfig} memory
@@ -14,6 +14,7 @@
  * @property {CoverageGateConfig} coverageGate
  * @property {GoalRule[]} goalRules
  * @property {AiSuggestConfig} [aiSuggest]
+ * @property {AiEyesConfig} [aiEyes]
  */
 
 /**
@@ -882,6 +883,62 @@
  * @property {string|null} sample_goal        - Example goal route
  * @property {GoalHit[]} [goals_hit]          - Stage 0E: distinct goals across matching flows
  * @property {number} [goal_score]            - Stage 0E: best score among matching flows
+ */
+
+// =============================================================================
+// Phase 2 Eyes: Visual Surface Enrichment types
+// =============================================================================
+
+/**
+ * @typedef {Object} AiEyesConfig
+ * @property {string} model              - Ollama vision model (default: 'llava:13b')
+ * @property {number} timeout            - Per-element Ollama request timeout in ms (default: 90000)
+ * @property {number} maxElements        - Max elements to screenshot per route (default: 30)
+ * @property {boolean} saveScreenshots   - Save PNGs to disk (default: true)
+ */
+
+/**
+ * Visual annotation for a single surface element.
+ * @typedef {Object} EyesAnnotation
+ * @property {string} surface_id         - trigger key or surface nodeId
+ * @property {string} label              - Original text label (may be empty for icon-only)
+ * @property {string} route              - Route where element was found
+ * @property {LocationGroup} location_group
+ * @property {string} icon_guess         - LLaVA's best guess for icon meaning (e.g. "settings", "mute")
+ * @property {string} visible_text       - Any text LLaVA reads in/near the element
+ * @property {string} nearby_context     - Short phrases visible near the element
+ * @property {number} confidence         - 0..1 LLaVA confidence
+ * @property {string} img_hash           - SHA-256 of the element screenshot
+ * @property {string|null} png_path      - Relative path to saved screenshot (null if not saved)
+ * @property {{ x: number, y: number, width: number, height: number }} bounding_box
+ */
+
+/**
+ * Provenance for Eyes patch suggestions.
+ * @typedef {Object} EyesPatchProvenance
+ * @property {string} icon_guess
+ * @property {string} visible_text
+ * @property {number} confidence
+ * @property {string} img_hash
+ * @property {string} model
+ */
+
+/**
+ * Surface hint patch — suggested labels for icon-only or text-poor surfaces.
+ * @typedef {Object} EyesPatch
+ * @property {Record<string, { iconLabel: string, nearbyContext: string }>} surfaceHints
+ * @property {Record<string, EyesPatchProvenance>} provenance
+ */
+
+/**
+ * Full ai-eyes output report.
+ * @typedef {Object} AiEyesReport
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {string} model
+ * @property {EyesAnnotation[]} annotations
+ * @property {EyesPatch} patch
+ * @property {{ total_surfaces: number, surfaces_screenshotted: number, surfaces_annotated: number, icon_only_found: number, avg_confidence: number }} stats
  */
 
 // =============================================================================
