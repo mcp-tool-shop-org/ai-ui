@@ -12,13 +12,13 @@ export const config: SiteConfig = {
     badge: 'CLI Tool',
     headline: 'AI-UI.',
     headlineAccent: 'Design diagnostics for SPAs.',
-    description: 'Crawls your running app, reads your docs, and tells you exactly which features have no discoverable UI — and which UI surfaces aren\'t documented. Deterministic. No LLM required.',
+    description: 'Crawls your running app, reads your docs, and tells you exactly which features have no discoverable UI — and which UI surfaces aren\'t documented. Deterministic core, optional local AI for semantic matching and patch generation.',
     primaryCta: { href: '#usage', label: 'Get started' },
     secondaryCta: { href: 'handbook/', label: 'Read the Handbook' },
     previews: [
-      { label: 'Install', code: 'git clone https://github.com/mcp-tool-shop-org/ai-ui.git\ncd ai-ui && npm install' },
+      { label: 'Install', code: 'npm install -g @mcptoolshop/ai-ui' },
       { label: 'Run', code: 'ai-ui atlas          # parse docs → feature catalog\nai-ui probe          # crawl UI → trigger graph\nai-ui diff           # match features ↔ triggers' },
-      { label: 'All-in-one', code: 'ai-ui stage0         # atlas + probe + diff\nai-ui graph          # build trigger graph\nai-ui design-map     # surface inventory + IA proposal' },
+      { label: 'AI pipeline', code: 'ai-ui ai-suggest     # semantic matching (Ollama)\nai-ui ai-eyes        # visual surface enrichment\nai-ui ai-hands       # PR-ready patches' },
     ],
   },
 
@@ -27,7 +27,7 @@ export const config: SiteConfig = {
       kind: 'features',
       id: 'features',
       title: 'How it works',
-      subtitle: 'Docs promise features. UI exposes triggers. AI-UI measures the gap.',
+      subtitle: 'Docs promise features. UI exposes triggers. AI-UI measures the gap — then helps you close it.',
       features: [
         {
           title: 'Atlas',
@@ -50,8 +50,8 @@ export const config: SiteConfig = {
           desc: 'Configurable effect predicates for SPAs where URLs don\'t change. Define success as storage writes, DOM mutations, or fetch calls — scored and named.',
         },
         {
-          title: 'Replay Packs',
-          desc: 'Bundle all artifacts into reproducible snapshots. Diff two packs to see exactly what changed, what improved, and what regressed between runs.',
+          title: 'AI Pipeline',
+          desc: 'Optional local Ollama commands: Brain (semantic matching), Eyes (visual surface enrichment), Hands (PR-ready patch generation with edit ranking). No data leaves your machine.',
         },
       ],
     },
@@ -76,6 +76,18 @@ ai-ui graph
 ai-ui design-map`,
         },
         {
+          title: 'AI-powered matching',
+          code: `# Semantic matching — closes gaps fuzzy
+# matching misses
+ai-ui ai-suggest
+
+# Visual enrichment — icon-only buttons
+ai-ui ai-eyes
+
+# PR-ready patches with trust ranking
+ai-ui ai-hands --min-rank 0.50`,
+        },
+        {
           title: 'Runtime evidence',
           code: `# Click triggers, capture side effects
 ai-ui runtime-effects
@@ -95,17 +107,6 @@ ai-ui verify --strict --gate minimum \\
   --min-coverage 60
 
 # Exit: 0=pass, 1=user, 2=runtime`,
-        },
-        {
-          title: 'Snapshot & compare',
-          code: `# Save a baseline
-ai-ui replay-pack
-
-# After changes, pack again
-ai-ui replay-pack
-
-# See what changed
-ai-ui replay-diff`,
         },
       ],
     },
@@ -129,6 +130,9 @@ ai-ui replay-diff`,
         ['`runtime-coverage`', 'Per-trigger coverage matrix'],
         ['`replay-pack`', 'Bundle artifacts into replay snapshot'],
         ['`replay-diff`', 'Compare two replay packs'],
+        ['`ai-suggest`', 'Semantic feature→trigger matching via Ollama'],
+        ['`ai-eyes`', 'Visual surface enrichment via LLaVA'],
+        ['`ai-hands`', 'PR-ready patches via qwen2.5-coder with edit ranking'],
         ['`stage0`', 'Run atlas + probe + diff in sequence'],
         ['`init-memory`', 'Create empty memory files for tracking'],
       ],
