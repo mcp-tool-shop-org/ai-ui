@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/ai-ui/readme.png" alt="AI-UI" width="200" />
+  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/ai-ui/readme.png" alt="AI-UI" width="360" />
 </p>
 
 **Automated design diagnostics for SPAs.** AI-UI crawls your running app, reads your docs, and tells you exactly which documented features have no discoverable UI entry point — and which UI surfaces aren't documented at all.
