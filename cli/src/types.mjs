@@ -6,13 +6,14 @@
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string, basePath: string, goalRoutes: string[] }} probe
  * @property {Record<string, string[]>} featureAliases
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string, replayPack: string, replayDiff: string, replayDiffReport: string, replayDiffSummary: string, designSurfaceInventory: string, designSurfaceInventoryReport: string, designFeatureMap: string, designFeatureMapReport: string, designTaskFlows: string, designIAProposal: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string, replayPack: string, replayDiff: string, replayDiffReport: string, replayDiffSummary: string, designSurfaceInventory: string, designSurfaceInventoryReport: string, designFeatureMap: string, designFeatureMapReport: string, designTaskFlows: string, designIAProposal: string, aiSuggestJson: string, aiSuggestPatchJson: string, aiSuggestMd: string }} output
  * @property {VerifyConfig} verify
  * @property {BaselineConfig} baseline
  * @property {MemoryConfig} memory
  * @property {RuntimeEffectsConfig} runtimeEffects
  * @property {CoverageGateConfig} coverageGate
  * @property {GoalRule[]} goalRules
+ * @property {AiSuggestConfig} [aiSuggest]
  */
 
 /**
@@ -881,6 +882,68 @@
  * @property {string|null} sample_goal        - Example goal route
  * @property {GoalHit[]} [goals_hit]          - Stage 0E: distinct goals across matching flows
  * @property {number} [goal_score]            - Stage 0E: best score among matching flows
+ */
+
+// =============================================================================
+// Phase 1 Brain: AI Suggest types
+// =============================================================================
+
+/**
+ * @typedef {Object} AiSuggestConfig
+ * @property {string} model              - Ollama model name (default: 'qwen2.5:14b')
+ * @property {number} top                - Max candidate surfaces per feature (default: 5)
+ * @property {number} minConfidence      - Floor for suggestion confidence (default: 0.55)
+ * @property {number} timeout            - Ollama request timeout in ms (default: 60000)
+ */
+
+/**
+ * A single candidate surface match for a feature.
+ * @typedef {Object} AiFeatureSuggestion
+ * @property {string} surface_id         - trigger key or surface nodeId
+ * @property {string} label              - Display label
+ * @property {string} route              - Route where surface lives
+ * @property {LocationGroup} location_group
+ * @property {number} score              - 0..1 match confidence from Brain
+ * @property {string} rationale          - Short explanation from Brain
+ */
+
+/**
+ * Brain output for one feature — ranked candidates + alias recommendations.
+ * @typedef {Object} AiSuggestion
+ * @property {string} feature_id
+ * @property {string} feature_text       - Original atlas feature name
+ * @property {string|null} doc_section   - Heading from doc source (if available)
+ * @property {AiFeatureSuggestion[]} candidates - Ranked best→worst
+ * @property {string[]} recommended_aliases     - Keywords for featureAliases
+ * @property {string|null} recommended_anchor   - Preferred surface label (exact match)
+ * @property {number} confidence                - 0..1 overall confidence
+ * @property {string} notes                     - Brain's reasoning notes
+ */
+
+/**
+ * Alias patch with provenance for auditing.
+ * @typedef {Object} AiAliasPatch
+ * @property {Record<string, string[]>} featureAliases  - feature_id → alias terms
+ * @property {Record<string, AiAliasPatchProvenance>} provenance - feature_id → why
+ */
+
+/**
+ * @typedef {Object} AiAliasPatchProvenance
+ * @property {string} anchor_label       - Label Brain recommended
+ * @property {number} confidence         - Brain's confidence
+ * @property {string[]} terms_added      - New aliases appended
+ * @property {string} model              - Ollama model used
+ */
+
+/**
+ * Full ai-suggest output report.
+ * @typedef {Object} AiSuggestReport
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {string} model              - Ollama model used
+ * @property {AiSuggestion[]} suggestions
+ * @property {AiAliasPatch} patch
+ * @property {{ total_features: number, features_analyzed: number, features_with_suggestions: number, avg_confidence: number }} stats
  */
 
 // =============================================================================

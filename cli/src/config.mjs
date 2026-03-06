@@ -53,6 +53,9 @@ const DEFAULTS = {
     designFeatureMapReport: 'ai-ui-output/ui-feature-map.md',
     designTaskFlows: 'ai-ui-output/ui-task-flows.md',
     designIAProposal: 'ai-ui-output/ui-ia-proposal.md',
+    aiSuggestJson: 'ai-ui-output/ai-suggest.json',
+    aiSuggestPatchJson: 'ai-ui-output/ai-suggest.patch.json',
+    aiSuggestMd: 'ai-ui-output/ai-suggest.md',
   },
   verify: {
     maxOrphanRatio: 0.25,
@@ -85,6 +88,12 @@ const DEFAULTS = {
     },
   },
   goalRules: [],
+  aiSuggest: {
+    model: 'qwen2.5:14b',
+    top: 5,
+    minConfidence: 0.55,
+    timeout: 60000,
+  },
 };
 
 /**
