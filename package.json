@@ -1,6 +1,7 @@
 {
   "name": "ai-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "description": "Automated design diagnostics for SPAs — crawl, diff, verify UI against docs",
   "private": true,
   "type": "module",
   "bin": {
@@ -24,6 +25,9 @@
   },
   "dependencies": {
     "astro": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "devDependencies": {
     "@mcptoolshop/websketch-ir": "^2.0.0",

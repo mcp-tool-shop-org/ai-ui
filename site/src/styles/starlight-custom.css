@@ -1,0 +1,18 @@
+/* Align Starlight with @mcptoolshop/site-theme dark palette */
+/* Accent: #22d3ee (cyan) — matches the probe dot in the AI-UI logo */
+:root {
+  --sl-color-accent-low: #083344;
+  --sl-color-accent: #22d3ee;
+  --sl-color-accent-high: #67e8f9;
+  --sl-color-bg-nav: #09090b;
+  --sl-color-bg-sidebar: #09090b;
+  --sl-color-bg: #09090b;
+  --sl-color-black: #09090b;
+  --sl-color-hairline-light: #27272a;
+  --sl-color-hairline: #27272a;
+  --sl-color-gray-6: #18181b;
+  --sl-color-gray-5: #27272a;
+  --sl-color-white: #fafafa;
+  --sl-color-text: #e4e4e7;
+  --sl-color-text-accent: #67e8f9;
+}

@@ -2,3 +2,7 @@ node_modules/
 dist/
 .astro/
 ai-ui-output/
+site/.astro/
+site/dist/
+site/node_modules/
+.polyglot-cache.json
