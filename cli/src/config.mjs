@@ -60,6 +60,10 @@ const DEFAULTS = {
     aiEyesPatchJson: 'ai-ui-output/eyes.patch.json',
     aiEyesMd: 'ai-ui-output/eyes.md',
     aiEyesScreenshots: 'ai-ui-output/eyes-screenshots',
+    aiHandsPlanMd: 'ai-ui-output/hands.plan.md',
+    aiHandsPatchDiff: 'ai-ui-output/hands.patch.diff',
+    aiHandsFilesJson: 'ai-ui-output/hands.files.json',
+    aiHandsVerifyMd: 'ai-ui-output/hands.verify.md',
   },
   verify: {
     maxOrphanRatio: 0.25,
@@ -103,6 +107,12 @@ const DEFAULTS = {
     timeout: 90000,
     maxElements: 30,
     saveScreenshots: true,
+  },
+  aiHands: {
+    model: 'qwen2.5-coder:7b',
+    timeout: 120000,
+    maxFileSize: 50000,
+    allowExtensions: ['.tsx', '.jsx', '.vue', '.svelte', '.html', '.ts', '.js', '.css'],
   },
 };
 

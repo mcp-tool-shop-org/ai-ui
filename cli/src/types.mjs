@@ -6,7 +6,7 @@
  * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string, basePath: string, goalRoutes: string[] }} probe
  * @property {Record<string, string[]>} featureAliases
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string, replayPack: string, replayDiff: string, replayDiffReport: string, replayDiffSummary: string, designSurfaceInventory: string, designSurfaceInventoryReport: string, designFeatureMap: string, designFeatureMapReport: string, designTaskFlows: string, designIAProposal: string, aiSuggestJson: string, aiSuggestPatchJson: string, aiSuggestMd: string, aiEyesJson: string, aiEyesPatchJson: string, aiEyesMd: string, aiEyesScreenshots: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string, replayPack: string, replayDiff: string, replayDiffReport: string, replayDiffSummary: string, designSurfaceInventory: string, designSurfaceInventoryReport: string, designFeatureMap: string, designFeatureMapReport: string, designTaskFlows: string, designIAProposal: string, aiSuggestJson: string, aiSuggestPatchJson: string, aiSuggestMd: string, aiEyesJson: string, aiEyesPatchJson: string, aiEyesMd: string, aiEyesScreenshots: string, aiHandsPlanMd: string, aiHandsPatchDiff: string, aiHandsFilesJson: string, aiHandsVerifyMd: string }} output
  * @property {VerifyConfig} verify
  * @property {BaselineConfig} baseline
  * @property {MemoryConfig} memory
@@ -15,6 +15,7 @@
  * @property {GoalRule[]} goalRules
  * @property {AiSuggestConfig} [aiSuggest]
  * @property {AiEyesConfig} [aiEyes]
+ * @property {AiHandsConfig} [aiHands]
  */
 
 /**
@@ -883,6 +884,63 @@
  * @property {string|null} sample_goal        - Example goal route
  * @property {GoalHit[]} [goals_hit]          - Stage 0E: distinct goals across matching flows
  * @property {number} [goal_score]            - Stage 0E: best score among matching flows
+ */
+
+// =============================================================================
+// Phase 3 Hands: Patch Generator types
+// =============================================================================
+
+/** @typedef {'add-aiui-hooks'|'surface-settings'|'goal-hooks'|'copy-fix'} HandsTaskType */
+
+/**
+ * @typedef {Object} AiHandsConfig
+ * @property {string} model              - Ollama coder model (default: 'qwen2.5-coder:7b')
+ * @property {number} timeout            - Per-edit Ollama request timeout in ms (default: 120000)
+ * @property {number} maxFileSize        - Max file size in bytes to send to coder (default: 50000)
+ * @property {string[]} allowExtensions  - File extensions allowed for editing
+ */
+
+/**
+ * A single code edit produced by Hands.
+ * @typedef {Object} HandsEdit
+ * @property {string} file               - Relative path from repo root
+ * @property {string} find               - Exact snippet to find (anchor)
+ * @property {string} replace            - Replacement snippet
+ * @property {string} rationale          - Why this edit was made
+ * @property {string} artifact_trigger   - Which artifact triggered this edit
+ * @property {number} confidence         - 0..1 coder confidence
+ * @property {boolean} proposal_only     - true if coder was uncertain (TODO markers)
+ */
+
+/**
+ * Plan for a single Hands task.
+ * @typedef {Object} HandsPlan
+ * @property {HandsTaskType} task
+ * @property {string} description        - Human-readable task description
+ * @property {HandsEdit[]} edits
+ * @property {string[]} risks            - Known risks or caveats
+ * @property {string[]} verify_commands  - Commands to run after applying
+ * @property {string[]} expected_deltas  - What metrics should improve
+ */
+
+/**
+ * Full Hands output report.
+ * @typedef {Object} HandsReport
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {string} model
+ * @property {string} repo_root          - Absolute path to target repo
+ * @property {HandsPlan[]} plans
+ * @property {{ total_edits: number, files_touched: number, proposal_only_count: number, avg_confidence: number }} stats
+ */
+
+/**
+ * A scanned file from the target repo.
+ * @typedef {Object} ScannedFile
+ * @property {string} path               - Relative path from repo root
+ * @property {string} language           - Detected language (tsx, jsx, vue, svelte, html, etc.)
+ * @property {number} size               - File size in bytes
+ * @property {string} content            - File content (truncated if over maxFileSize)
  */
 
 // =============================================================================
