@@ -323,8 +323,17 @@ export function rankEdits(edits, fileContents, provenance) {
     return { ...edit, rank };
   });
 
-  // Sort descending by rank_score (stable sort preserves original order for ties)
-  ranked.sort((a, b) => b.rank.rank_score - a.rank.rank_score);
+  // Sort: validated before proposal_only (stable invariant), then by rank_score desc.
+  // This guarantees no proposal_only edit ever appears above a validated edit,
+  // regardless of score — the validation gap is the dominant signal.
+  ranked.sort((a, b) => {
+    // Primary: validated (0) before proposal_only (1)
+    const aProposal = a.proposal_only ? 1 : 0;
+    const bProposal = b.proposal_only ? 1 : 0;
+    if (aProposal !== bProposal) return aProposal - bProposal;
+    // Secondary: rank_score descending
+    return b.rank.rank_score - a.rank.rank_score;
+  });
 
   return ranked;
 }
@@ -343,4 +352,17 @@ export function rankSummary(rankedEdits) {
     else low++;
   }
   return `${high} high-confidence, ${medium} medium, ${low} low`;
+}
+
+/**
+ * Filter edits by minimum rank score threshold.
+ * Useful for --min-rank to suppress low-confidence hunks.
+ *
+ * @param {RankedEdit[]} rankedEdits
+ * @param {number} minScore - Minimum rank_score to keep (0.0–1.0)
+ * @returns {{ kept: RankedEdit[], dropped: number }}
+ */
+export function filterByMinRank(rankedEdits, minScore) {
+  const kept = rankedEdits.filter(e => e.rank.rank_score >= minScore);
+  return { kept, dropped: rankedEdits.length - kept.length };
 }

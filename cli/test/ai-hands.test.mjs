@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { detectLanguage, isAllowedExtension, scanRepo, filterRelevantFiles, findNearLine, extractContextWindow } from '../src/repo-scan.mjs';
 import { buildUnifiedDiff, buildFilesManifest, validateEdit } from '../src/git-diff.mjs';
 import { buildCoderPrompt, parseCoderResponse, CoderParseError } from '../src/ollama-coder.mjs';
-import { computeEditRank, rankEdits, rankSummary } from '../src/edit-rank.mjs';
+import { computeEditRank, rankEdits, rankSummary, filterByMinRank } from '../src/edit-rank.mjs';
 
 // =============================================================================
 // repo-scan tests
@@ -837,5 +837,122 @@ describe('rankSummary', () => {
       { rank: { rank_score: 0.85, rank_bucket: /** @type {const} */ ('high'), rank_reasons: [], risk_level: /** @type {const} */ ('low') } },
     ];
     assert.equal(rankSummary(/** @type {any} */ (ranked)), '2 high-confidence, 0 medium, 0 low');
+  });
+});
+
+// =============================================================================
+// Stable sort invariant: validated always before proposal_only
+// =============================================================================
+
+describe('rankEdits — stable sort invariant', () => {
+  /** @returns {import('../src/types.mjs').HandsEdit} */
+  function makeEdit(overrides = {}) {
+    return {
+      file: 'src/App.tsx',
+      find: '<button>Click</button>',
+      replace: '<button data-aiui-safe="true">Click</button>',
+      rationale: 'Add safe hook',
+      artifact_trigger: 'add-aiui-hooks',
+      confidence: 0.9,
+      proposal_only: false,
+      ...overrides,
+    };
+  }
+
+  it('validated edits always come before proposal_only regardless of score', () => {
+    // Craft a case where a proposal_only edit could theoretically score higher
+    // (e.g., via provenance bonuses) but must still sort after validated edits
+    const edits = [
+      makeEdit({ proposal_only: true, confidence: 0.4, rationale: 'proposal A' }),
+      makeEdit({ proposal_only: false, confidence: 0.9, rationale: 'validated B' }),
+      makeEdit({ proposal_only: true, confidence: 0.3, rationale: 'proposal C' }),
+      makeEdit({ proposal_only: false, confidence: 0.85, rationale: 'validated D' }),
+    ];
+
+    const ranked = rankEdits(edits);
+    assert.equal(ranked.length, 4);
+
+    // First two must be validated, last two must be proposal_only
+    assert.equal(ranked[0].proposal_only, false, 'position 0 should be validated');
+    assert.equal(ranked[1].proposal_only, false, 'position 1 should be validated');
+    assert.equal(ranked[2].proposal_only, true, 'position 2 should be proposal_only');
+    assert.equal(ranked[3].proposal_only, true, 'position 3 should be proposal_only');
+  });
+
+  it('within validated group, sorts by rank_score descending', () => {
+    // Use different file paths to create different rank scores:
+    // auth file gets a -0.10 safety penalty, so normal file scores higher
+    const edits = [
+      makeEdit({ proposal_only: false, file: 'src/auth/login.tsx', rationale: 'lower score (auth penalty)' }),
+      makeEdit({ proposal_only: false, file: 'src/App.tsx', rationale: 'higher score (no penalty)' }),
+    ];
+
+    const ranked = rankEdits(edits);
+    assert.ok(ranked[0].rank.rank_score > ranked[1].rank.rank_score,
+      `first (${ranked[0].rank.rank_score}) should > second (${ranked[1].rank.rank_score})`);
+    assert.equal(ranked[0].rationale, 'higher score (no penalty)');
+  });
+
+  it('within proposal_only group, sorts by rank_score descending', () => {
+    const edits = [
+      makeEdit({ proposal_only: true, confidence: 0.2, rationale: 'weaker proposal' }),
+      makeEdit({ proposal_only: true, confidence: 0.4, rationale: 'stronger proposal' }),
+    ];
+
+    const ranked = rankEdits(edits);
+    assert.ok(ranked[0].rank.rank_score >= ranked[1].rank.rank_score);
+  });
+});
+
+// =============================================================================
+// filterByMinRank
+// =============================================================================
+
+describe('filterByMinRank', () => {
+  /** @returns {import('../src/edit-rank.mjs').RankedEdit} */
+  function makeRankedEdit(score, bucket = /** @type {const} */ ('high')) {
+    return /** @type {any} */ ({
+      file: 'src/App.tsx',
+      find: '<button>',
+      replace: '<button data-aiui-safe>',
+      rationale: 'test',
+      artifact_trigger: 'test',
+      confidence: 0.9,
+      proposal_only: false,
+      rank: { rank_score: score, rank_bucket: bucket, rank_reasons: [], risk_level: /** @type {const} */ ('low') },
+    });
+  }
+
+  it('keeps edits above threshold', () => {
+    const edits = [
+      makeRankedEdit(0.90, 'high'),
+      makeRankedEdit(0.60, 'medium'),
+      makeRankedEdit(0.30, 'low'),
+    ];
+
+    const { kept, dropped } = filterByMinRank(edits, 0.50);
+    assert.equal(kept.length, 2);
+    assert.equal(dropped, 1);
+    assert.ok(kept.every(e => e.rank.rank_score >= 0.50));
+  });
+
+  it('drops all below threshold', () => {
+    const edits = [makeRankedEdit(0.30, 'low'), makeRankedEdit(0.20, 'low')];
+    const { kept, dropped } = filterByMinRank(edits, 0.50);
+    assert.equal(kept.length, 0);
+    assert.equal(dropped, 2);
+  });
+
+  it('keeps all when threshold is 0', () => {
+    const edits = [makeRankedEdit(0.10, 'low'), makeRankedEdit(0.90, 'high')];
+    const { kept, dropped } = filterByMinRank(edits, 0);
+    assert.equal(kept.length, 2);
+    assert.equal(dropped, 0);
+  });
+
+  it('handles empty list', () => {
+    const { kept, dropped } = filterByMinRank([], 0.50);
+    assert.equal(kept.length, 0);
+    assert.equal(dropped, 0);
   });
 });

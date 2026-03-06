@@ -21,7 +21,7 @@ import { checkOllamaAvailable, checkModelAvailable, OllamaError } from './ollama
 import { scanRepo, filterRelevantFiles, findNearLine, extractContextWindow } from './repo-scan.mjs';
 import { buildUnifiedDiff, buildFilesManifest, validateEdit } from './git-diff.mjs';
 import { buildCoderPrompt, parseCoderResponse, queryCoderForEdits, CoderParseError } from './ollama-coder.mjs';
-import { rankEdits, rankSummary } from './edit-rank.mjs';
+import { rankEdits, rankSummary, filterByMinRank } from './edit-rank.mjs';
 
 const VERSION = '1.0.0';
 
@@ -461,36 +461,20 @@ function renderPlanMd(report) {
           lines.push(``);
         }
 
-        // Render each bucket
-        if (high.length > 0) {
-          lines.push(`### High confidence (${high.length})`);
+        // Render each bucket — with risk indicator for high-risk edits
+        for (const [bucket, label, items] of /** @type {[string, string, typeof ranked][]} */ ([
+          ['high', 'High confidence', high],
+          ['medium', 'Medium confidence', medium],
+          ['low', 'Low confidence', low],
+        ])) {
+          if (items.length === 0) continue;
+          lines.push(`### ${label} (${items.length})`);
           lines.push(``);
-          for (const edit of high) {
+          for (const edit of items) {
             const reasons = edit.rank.rank_reasons.filter(r => !r.startsWith('validated') && !r.startsWith('proposal')).slice(0, 3).join(', ');
             const validTag = edit.proposal_only ? 'proposal' : 'validated';
-            lines.push(`- **Edit #${ranked.indexOf(edit) + 1}** — \`${edit.file}\`: ${edit.rationale.slice(0, 60)} _(${validTag}, score=${edit.rank.rank_score.toFixed(2)}${reasons ? ', ' + reasons : ''})_`);
-          }
-          lines.push(``);
-        }
-
-        if (medium.length > 0) {
-          lines.push(`### Medium confidence (${medium.length})`);
-          lines.push(``);
-          for (const edit of medium) {
-            const reasons = edit.rank.rank_reasons.filter(r => !r.startsWith('validated') && !r.startsWith('proposal')).slice(0, 3).join(', ');
-            const validTag = edit.proposal_only ? 'proposal' : 'validated';
-            lines.push(`- **Edit #${ranked.indexOf(edit) + 1}** — \`${edit.file}\`: ${edit.rationale.slice(0, 60)} _(${validTag}, score=${edit.rank.rank_score.toFixed(2)}${reasons ? ', ' + reasons : ''})_`);
-          }
-          lines.push(``);
-        }
-
-        if (low.length > 0) {
-          lines.push(`### Low confidence (${low.length})`);
-          lines.push(``);
-          for (const edit of low) {
-            const reasons = edit.rank.rank_reasons.filter(r => !r.startsWith('validated') && !r.startsWith('proposal')).slice(0, 3).join(', ');
-            const validTag = edit.proposal_only ? 'proposal' : 'validated';
-            lines.push(`- **Edit #${ranked.indexOf(edit) + 1}** — \`${edit.file}\`: ${edit.rationale.slice(0, 60)} _(${validTag}, score=${edit.rank.rank_score.toFixed(2)}${reasons ? ', ' + reasons : ''})_`);
+            const riskTag = edit.rank.risk_level === 'high' ? ' ⚠️ high-risk' : edit.rank.risk_level === 'med' ? ' ⚠️ med-risk' : '';
+            lines.push(`- **Edit #${ranked.indexOf(edit) + 1}** — \`${edit.file}\`: ${edit.rationale.slice(0, 60)} _(${validTag}, score=${edit.rank.rank_score.toFixed(2)}${riskTag}${reasons ? ', ' + reasons : ''})_`);
           }
           lines.push(``);
         }
@@ -700,7 +684,7 @@ function buildRankedManifest(edits) {
  * Main command handler for ai-hands.
  *
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ from?: string, out?: string, replay?: string, verbose?: boolean, dryRun?: boolean, model?: string, repo?: string, tasks?: string }} flags
+ * @param {{ from?: string, out?: string, replay?: string, verbose?: boolean, dryRun?: boolean, model?: string, repo?: string, tasks?: string, minRank?: number }} flags
  */
 export async function runAiHands(config, flags) {
   const cwd = process.cwd();
@@ -932,6 +916,16 @@ export async function runAiHands(config, flags) {
       if (flags.verbose) {
         const summary = rankSummary(rankedEdits);
         console.error(`    rank: ${summary}`);
+      }
+
+      // Apply --min-rank filter if specified
+      if (typeof flags.minRank === 'number' && flags.minRank > 0) {
+        const { kept, dropped } = filterByMinRank(rankedEdits, flags.minRank);
+        if (dropped > 0) {
+          console.error(`    --min-rank ${flags.minRank}: kept ${kept.length}, dropped ${dropped}`);
+        }
+        rankedEdits = kept;
+        totalEdits -= dropped; // adjust total count
       }
     }
 

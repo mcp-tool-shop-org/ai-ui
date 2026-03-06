@@ -62,6 +62,7 @@ Options:
   --eyes <path>     (ai-suggest) Path to eyes.json for visual enrichment
   --repo <path>     (ai-hands) Path to target repo root (default: CWD)
   --tasks <list>    (ai-hands) Comma-separated task types (default: all)
+  --min-rank <n>    (ai-hands) Minimum rank score 0.0-1.0, suppress lower edits
   --memory-strict   Fail if memory files don't parse
   --help            Show this help
   --version         Show version
@@ -201,7 +202,7 @@ async function main() {
  * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean, runPipeline: boolean, strict: boolean, json: boolean, write: boolean, force: boolean, noMemory: boolean, memoryStrict: boolean }}
  */
 function parseFlags(args) {
-  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined, gate: undefined, minCoverage: undefined, replay: undefined, noRedact: false, top: undefined, model: undefined, minConfidence: undefined, eyes: undefined, repo: undefined, tasks: undefined };
+  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined, gate: undefined, minCoverage: undefined, replay: undefined, noRedact: false, top: undefined, model: undefined, minConfidence: undefined, eyes: undefined, repo: undefined, tasks: undefined, minRank: undefined };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--config' && args[i + 1]) {
@@ -275,6 +276,8 @@ function parseFlags(args) {
       flags.repo = args[++i];
     } else if (a === '--tasks' && args[i + 1]) {
       flags.tasks = args[++i];
+    } else if (a === '--min-rank' && args[i + 1]) {
+      flags.minRank = parseFloat(args[++i]);
     }
   }
   return flags;
@@ -289,7 +292,7 @@ function collectPositionalArgs(args) {
   const valueFlags = new Set(['--config', '--from', '--out', '--format', '--max-fixes',
     '--max-blockers', '--max-warnings', '--url', '--actions-top', '--gate',
     '--min-coverage', '--replay', '--top', '--model', '--min-confidence', '--eyes',
-    '--repo', '--tasks']);
+    '--repo', '--tasks', '--min-rank']);
   const result = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith('-')) {
