@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import { fail } from './config.mjs';
-import { matchScore } from './normalize.mjs';
+import { matchScore, stripBasePath, detectBasePath } from './normalize.mjs';
 import { buildEvidenceKey, deduplicateEvidence, computeConfidence, normalizeEffectId } from './runtime-effects.mjs';
 
 // =============================================================================
@@ -16,9 +16,10 @@ import { buildEvidenceKey, deduplicateEvidence, computeConfidence, normalizeEffe
  * @param {import('./types.mjs').Surface[]} surfaces - From probe.surfaces.json
  * @param {import('./types.mjs').Feature[]} features - From atlas.json
  * @param {any} diff - Parsed diff.json
+ * @param {string} [basePath=''] - Base path to strip from href targets
  * @returns {import('./types.mjs').TriggerGraph}
  */
-export function buildGraph(triggers, routeChanges, surfaces, features, diff) {
+export function buildGraph(triggers, routeChanges, surfaces, features, diff, basePath = '') {
   /** @type {Map<string, import('./types.mjs').GraphNode>} */
   const nodeMap = new Map();
   /** @type {import('./types.mjs').GraphEdge[]} */
@@ -27,8 +28,8 @@ export function buildGraph(triggers, routeChanges, surfaces, features, diff) {
   // --- 1. Route nodes from route_changes ---
   const routePaths = new Set();
   for (const rc of routeChanges) {
-    routePaths.add(rc.from);
-    routePaths.add(rc.to);
+    routePaths.add(basePath ? stripBasePath(rc.from, basePath) : rc.from);
+    routePaths.add(basePath ? stripBasePath(rc.to, basePath) : rc.to);
   }
   // Also add routes from triggers
   for (const t of triggers) {
@@ -72,6 +73,7 @@ export function buildGraph(triggers, routeChanges, surfaces, features, diff) {
           targetPath = new URL(t.href).pathname;
         }
       } catch { /* keep as-is */ }
+      if (basePath) targetPath = stripBasePath(targetPath, basePath);
       const targetRouteId = `route:${targetPath}`;
       // Ensure target route node exists
       if (!nodeMap.has(targetRouteId)) {
@@ -836,7 +838,8 @@ export async function runGraph(config, flags) {
   }
 
   // Build graph
-  let graph = buildGraph(triggers, routeChanges, surfaces, features, diff);
+  const basePath = config.probe.basePath || detectBasePath(config.probe.baseUrl);
+  let graph = buildGraph(triggers, routeChanges, surfaces, features, diff, basePath);
 
   // --with-runtime: augment with runtime effects if available
   if (flags.withRuntime) {

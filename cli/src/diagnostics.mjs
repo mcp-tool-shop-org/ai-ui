@@ -189,14 +189,19 @@ export function compositeScore(label, pattern, intent, style) {
  * @param {string|null} candidate.pattern
  * @param {{ event: string, intent: string }[]} candidate.handlers
  * @param {string[]} candidate.styleTokens
+ * @param {string[]} [candidate.enriched_labels] - aria-label, title, etc.
  * @returns {import('./types.mjs').CandidateAttempt}
  */
 export function scoreCandidate(featureNames, candidate) {
-  // Best label score across all feature name variants
+  // Best label score across all feature name variants AND enriched labels
+  const allLabels = [candidate.source_label, ...(candidate.enriched_labels || [])];
   let bestLabel = 0;
   for (const name of featureNames) {
-    const score = matchScore(name, candidate.source_label);
-    if (score > bestLabel) bestLabel = score;
+    for (const candidateLabel of allLabels) {
+      if (!candidateLabel) continue;
+      const score = matchScore(name, candidateLabel);
+      if (score > bestLabel) bestLabel = score;
+    }
   }
 
   // Extract words from all feature names for affinity matching

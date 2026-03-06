@@ -347,3 +347,51 @@ describe('formatFailureReason', () => {
     assert.ok(formatFailureReason('pattern_mismatch').length > 0);
   });
 });
+
+// =============================================================================
+// enriched_labels in scoreCandidate
+// =============================================================================
+
+describe('enriched label scoring', () => {
+  const baseCandidate = {
+    source_type: 'trigger',
+    source_id: 'trigger:/|Mute',
+    source_label: 'Mute',
+    source_route: '/',
+    pattern: null,
+    handlers: [],
+    styleTokens: [],
+  };
+
+  it('enriched_labels boosts label score', () => {
+    const withEnriched = scoreCandidate(['Ambient soundscapes'], {
+      ...baseCandidate,
+      enriched_labels: ['Toggle ambient soundscapes'],
+    });
+    const withoutEnriched = scoreCandidate(['Ambient soundscapes'], baseCandidate);
+    assert.ok(withEnriched.label_score > withoutEnriched.label_score,
+      'enriched_labels should provide a better label match');
+  });
+
+  it('title_attr enables exact match via enriched_labels', () => {
+    const result = scoreCandidate(['Mute sound'], {
+      ...baseCandidate,
+      source_label: 'X',
+      enriched_labels: ['Mute sound'],
+    });
+    assert.equal(result.label_score, 1.0, 'Exact match via enriched_labels');
+  });
+
+  it('no enriched_labels → same scores as before', () => {
+    const result = scoreCandidate(['Search'], baseCandidate);
+    const resultExplicit = scoreCandidate(['Search'], { ...baseCandidate, enriched_labels: [] });
+    assert.equal(result.composite_score, resultExplicit.composite_score);
+  });
+
+  it('featureAliases keywords boost match above threshold', () => {
+    // "Ambient sound system" feature with alias "Mute" should match trigger labeled "Mute"
+    const result = scoreCandidate(['Ambient sound system', 'Mute'], baseCandidate);
+    assert.ok(result.composite_score >= 0.4,
+      'featureAliases keyword (via namesToTry) should produce a match');
+  });
+});

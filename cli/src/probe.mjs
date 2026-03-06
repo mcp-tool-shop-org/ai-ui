@@ -2,6 +2,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import { fail } from './config.mjs';
+import { stripBasePath, detectBasePath } from './normalize.mjs';
 
 /**
  * Run the Probe command: Playwright crawl → trigger graph → probe.jsonl.
@@ -19,6 +20,7 @@ export async function runProbe(config, flags) {
   }
 
   const { baseUrl, routes, maxDepth, timeout, skipLabels, safeOverride } = config.probe;
+  const basePath = config.probe.basePath || detectBasePath(baseUrl);
   const cwd = process.cwd();
   const outPath = resolve(cwd, config.output.probe);
   mkdirSync(dirname(outPath), { recursive: true });
@@ -65,7 +67,7 @@ export async function runProbe(config, flags) {
   page.on('dialog', async (dialog) => {
     writeLine({
       type: 'dialog',
-      route: page.url().replace(baseUrl, '') || '/',
+      route: stripBasePath(page.url().replace(baseUrl, '') || '/', basePath),
       kind: dialog.type(),
       message: dialog.message(),
       timestamp: new Date().toISOString(),
@@ -142,6 +144,9 @@ export async function runProbe(config, flags) {
           if (classes.length) selector = `${tag}.${classes.join('.')}`;
         }
 
+        const ariaLabel = el.getAttribute('aria-label') || '';
+        const titleAttr = el.getAttribute('title') || '';
+
         results.push({
           label,
           href,
@@ -150,6 +155,8 @@ export async function runProbe(config, flags) {
           parentNav,
           isDestructive,
           isSafeOverride,
+          ariaLabel,
+          titleAttr,
         });
       }
 
@@ -171,6 +178,8 @@ export async function runProbe(config, flags) {
         selector: t.selector,
         depth,
         parent_nav: t.parentNav,
+        aria_label: t.ariaLabel || undefined,
+        title_attr: t.titleAttr || undefined,
         timestamp: new Date().toISOString(),
       };
 
@@ -193,7 +202,7 @@ export async function runProbe(config, flags) {
         .map(t => {
           try {
             const u = new URL(t.href, baseUrl);
-            return u.pathname;
+            return stripBasePath(u.pathname, basePath);
           } catch { return null; }
         })
         .filter(r => r && !visitedRoutes.has(r));
@@ -204,7 +213,7 @@ export async function runProbe(config, flags) {
           from: route,
           to: newRoute,
           trigger_label: triggers.find(t => {
-            try { return new URL(t.href, baseUrl).pathname === newRoute; } catch { return false; }
+            try { return stripBasePath(new URL(t.href, baseUrl).pathname, basePath) === newRoute; } catch { return false; }
           })?.label || 'unknown',
           timestamp: new Date().toISOString(),
         });

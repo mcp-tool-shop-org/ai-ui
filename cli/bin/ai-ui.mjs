@@ -23,6 +23,9 @@ Commands:
   init-memory  Create empty memory files (mappings/decisions/exceptions)
   runtime-effects  Click triggers and capture observed effects (runtime-effects.jsonl)
   runtime-coverage Per-trigger coverage matrix (probed/surface/observed)
+  replay-pack  Bundle pipeline artifacts into a reproducible replay pack
+  replay-diff  Compare two replay packs (replay-diff.json/.md/.summary.json)
+  design-map   Generate design artifacts (surface inventory, feature map, task flows, IA proposal)
   stage0       Run atlas → probe → diff in sequence
 
 Options:
@@ -48,6 +51,9 @@ Options:
   --actions-top <n> (runtime-coverage) Max actions to include (default: 20)
   --gate <mode>     (verify) Coverage CI gate: none|minimum|regressions (default: none)
   --min-coverage <n> (verify) Override min coverage % for minimum gate mode
+  --replay <path>   (verify) Replay from a .replay.json pack instead of live artifacts
+  --no-redact       (replay-pack) Disable URL/storage redaction
+  --top <n>         (replay-diff) Limit displayed items per section (default: 10)
   --memory-strict   Fail if memory files don't parse
   --help            Show this help
   --version         Show version
@@ -136,6 +142,26 @@ async function main() {
       await runRuntimeCoverage(config, flags);
       break;
     }
+    case 'replay-pack': {
+      const { runReplayPack } = await import('../src/replay-pack.mjs');
+      await runReplayPack(config, flags);
+      break;
+    }
+    case 'replay-diff': {
+      const pos = collectPositionalArgs(args);
+      if (pos.length < 3) {
+        console.error('Usage: ai-ui replay-diff <a.replay.json> <b.replay.json>');
+        process.exit(1);
+      }
+      const { runReplayDiff } = await import('../src/replay-diff.mjs');
+      await runReplayDiff(config, flags, pos[1], pos[2]);
+      break;
+    }
+    case 'design-map': {
+      const { runDesignMap } = await import('../src/design-map.mjs');
+      await runDesignMap(config, flags);
+      break;
+    }
     case 'stage0': {
       const { runStage0 } = await import('../src/stage0.mjs');
       await runStage0(config, flags);
@@ -152,7 +178,7 @@ async function main() {
  * @returns {{ config?: string, from?: string, out?: string, verbose: boolean, help: boolean, version: boolean, runPipeline: boolean, strict: boolean, json: boolean, write: boolean, force: boolean, noMemory: boolean, memoryStrict: boolean }}
  */
 function parseFlags(args) {
-  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined, gate: undefined, minCoverage: undefined };
+  const flags = { config: undefined, from: undefined, out: undefined, verbose: false, help: false, version: false, runPipeline: false, strict: false, json: false, write: false, force: false, noMemory: false, noMustSurface: false, format: undefined, maxFixes: undefined, maxBlockers: undefined, maxWarnings: undefined, memoryStrict: false, url: undefined, withRuntime: false, dryRun: false, actions: false, actionsTop: undefined, gate: undefined, minCoverage: undefined, replay: undefined, noRedact: false, top: undefined };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--config' && args[i + 1]) {
@@ -210,9 +236,35 @@ function parseFlags(args) {
       flags.gate = mode;
     } else if (a === '--min-coverage' && args[i + 1]) {
       flags.minCoverage = parseInt(args[++i], 10);
+    } else if (a === '--replay' && args[i + 1]) {
+      flags.replay = args[++i];
+    } else if (a === '--no-redact') {
+      flags.noRedact = true;
+    } else if (a === '--top' && args[i + 1]) {
+      flags.top = parseInt(args[++i], 10);
     }
   }
   return flags;
+}
+
+/**
+ * Collect positional (non-flag) arguments, skipping known value-flags.
+ * @param {string[]} args
+ * @returns {string[]} [command, ...positionals]
+ */
+function collectPositionalArgs(args) {
+  const valueFlags = new Set(['--config', '--from', '--out', '--format', '--max-fixes',
+    '--max-blockers', '--max-warnings', '--url', '--actions-top', '--gate',
+    '--min-coverage', '--replay', '--top']);
+  const result = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith('-')) {
+      if (valueFlags.has(args[i])) i++;
+      continue;
+    }
+    result.push(args[i]);
+  }
+  return result;
 }
 
 main().catch(err => {

@@ -104,13 +104,15 @@ export async function runDiff(config, flags) {
   for (const feature of features) {
     if (matchedFeatureIds.has(feature.id)) continue;
 
-    const namesToTry = [feature.name, ...feature.synonyms];
+    const aliases = (config.featureAliases || {})[feature.id] || [];
+    const namesToTry = [feature.name, ...feature.synonyms, ...aliases];
     /** @type {import('./types.mjs').CandidateAttempt[]} */
     const allCandidates = [];
 
     // Score against probe triggers
     for (const trigger of triggers) {
       if (matchedTriggerKeys.has(triggerKey(trigger))) continue;
+      const enrichedLabels = [trigger.aria_label, trigger.title_attr].filter(Boolean);
       allCandidates.push(scoreCandidate(namesToTry, {
         source_type: 'trigger',
         source_id: triggerKey(trigger),
@@ -119,6 +121,7 @@ export async function runDiff(config, flags) {
         pattern: null,
         handlers: [],
         styleTokens: [],
+        enriched_labels: enrichedLabels,
       }));
     }
 

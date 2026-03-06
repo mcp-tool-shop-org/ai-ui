@@ -1,0 +1,411 @@
+{
+  "graph": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "route:/docs", "type": "route", "label": "/docs", "route": "/docs", "meta": {} },
+      { "id": "route:/settings", "type": "route", "label": "/settings", "route": "/settings", "meta": {} },
+
+      { "id": "trigger:/|Docs", "type": "trigger", "label": "Docs", "route": "/", "meta": { "element": "a", "selector": "nav a.docs", "parent_nav": true, "depth": 0, "href": "/docs" } },
+      { "id": "trigger:/|Get Started", "type": "trigger", "label": "Get Started", "route": "/", "meta": { "element": "a", "selector": "nav a.cta", "parent_nav": true, "depth": 0, "href": "/get-started" } },
+      { "id": "trigger:/docs|Search", "type": "trigger", "label": "Search", "route": "/docs", "meta": { "element": "button", "selector": "button.search", "parent_nav": false, "depth": 1, "href": null } },
+      { "id": "trigger:/settings|Delete Account", "type": "trigger", "label": "Delete Account", "route": "/settings", "meta": { "element": "button", "selector": "button.danger", "parent_nav": false, "depth": 2, "href": null } },
+      { "id": "trigger:/|More...", "type": "trigger", "label": "More...", "route": "/", "meta": { "element": "button", "selector": "button.overflow", "parent_nav": false, "depth": 0, "href": null } },
+
+      { "id": "surface:link-docs", "type": "surface", "label": "docs", "route": "/", "meta": { "role": "LINK", "pattern": null, "styleTokens": ["primary"] } },
+      { "id": "surface:btn-get-started", "type": "surface", "label": "get-started", "route": "/", "meta": { "role": "BUTTON", "pattern": null, "styleTokens": ["primary"] } },
+      { "id": "surface:btn-delete", "type": "surface", "label": "delete-account", "route": "/settings", "meta": { "role": "BUTTON", "pattern": null, "styleTokens": ["destructive"] } },
+
+      { "id": "effect:navigate:/docs", "type": "effect", "label": "navigate → /docs", "meta": { "kind": "navigate", "event": "click", "route": "/" } },
+      { "id": "effect:navigate:/get-started", "type": "effect", "label": "navigate → /get-started", "meta": { "kind": "navigate", "event": "click", "route": "/" } },
+      { "id": "effect:filter:/docs", "type": "effect", "label": "filter docs", "meta": { "kind": "filter", "event": "click", "route": "/docs" } },
+      { "id": "effect:delete:/settings", "type": "effect", "label": "delete account", "meta": { "kind": "delete", "event": "click", "route": "/settings" } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Docs", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Get Started", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|More...", "type": "contains" },
+      { "from": "route:/docs", "to": "trigger:/docs|Search", "type": "contains" },
+      { "from": "route:/settings", "to": "trigger:/settings|Delete Account", "type": "contains" },
+
+      { "from": "trigger:/|Docs", "to": "route:/docs", "type": "navigates_to" },
+      { "from": "trigger:/|Get Started", "to": "route:/get-started", "type": "navigates_to" },
+
+      { "from": "trigger:/|Docs", "to": "surface:link-docs", "type": "maps_to", "weight": 0.9 },
+      { "from": "trigger:/|Get Started", "to": "surface:btn-get-started", "type": "maps_to", "weight": 0.95 },
+      { "from": "trigger:/settings|Delete Account", "to": "surface:btn-delete", "type": "maps_to", "weight": 1.0 },
+
+      { "from": "surface:link-docs", "to": "effect:navigate:/docs", "type": "produces", "meta": { "event": "click", "intent": "navigate" } },
+      { "from": "surface:btn-get-started", "to": "effect:navigate:/get-started", "type": "produces", "meta": { "event": "click", "intent": "navigate" } },
+      { "from": "surface:btn-delete", "to": "effect:delete:/settings", "type": "produces", "meta": { "event": "click", "intent": "delete" } }
+    ],
+    "stats": {
+      "total_nodes": 15,
+      "by_type": { "trigger": 5, "surface": 3, "effect": 4, "route": 3, "feature": 0 },
+      "total_edges": 13,
+      "by_edge_type": { "contains": 5, "navigates_to": 2, "maps_to": 3, "produces": 3, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 2
+    }
+  },
+
+  "diff": {
+    "version": "1.1.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "matched": [
+      { "feature_id": "documentation", "feature_name": "Documentation", "trigger_label": "Docs", "trigger_route": "/", "match_type": "fuzzy", "confidence": 0.85 },
+      { "feature_id": "search", "feature_name": "Search", "trigger_label": "Search", "trigger_route": "/docs", "match_type": "exact", "confidence": 1.0 }
+    ],
+    "documented_not_discoverable": [
+      { "feature_id": "api-keys", "feature_name": "API Keys", "sources": ["README.md:30"], "failure_reason": "missing_surface", "top_candidates": [], "suggestions": [], "reason": "No matching trigger or surface found" }
+    ],
+    "discoverable_not_documented": [
+      { "trigger_label": "More...", "trigger_route": "/", "trigger_selector": "button.overflow", "surface_evidence": { "has_surface": false }, "doc_suggestion": "Add 'More' to documentation", "reason": "No matching feature in atlas" },
+      { "trigger_label": "Get Started", "trigger_route": "/", "trigger_selector": "nav a.cta", "surface_evidence": { "has_surface": true, "surface_nodeId": "btn-get-started" }, "doc_suggestion": "Add 'Get Started' to documentation", "reason": "No matching feature in atlas" }
+    ],
+    "burial_index": [
+      { "trigger_label": "Docs", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Get Started", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Search", "route": "/docs", "depth": 1, "in_primary_nav": false, "behind_overflow": false, "burial_score": 5 },
+      { "trigger_label": "Delete Account", "route": "/settings", "depth": 2, "in_primary_nav": false, "behind_overflow": false, "burial_score": 7 },
+      { "trigger_label": "More...", "route": "/", "depth": 0, "in_primary_nav": false, "behind_overflow": true, "burial_score": 8 }
+    ],
+    "stats": {
+      "total_features": 3,
+      "total_triggers": 5,
+      "total_surfaces": 3,
+      "matched": 2,
+      "documented_not_discoverable": 1,
+      "discoverable_not_documented": 2,
+      "ambiguous_matches": 0,
+      "coverage_percent": 67,
+      "top_failure_reasons": { "missing_surface": 1 },
+      "top_suggested_rules": {}
+    }
+  },
+
+  "coverage": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "triggers": [
+      { "trigger_id": "trigger:/|Docs", "route": "/", "label": "Docs", "probed": true, "hasSurface": true, "observed": true, "status": "fully_covered", "effects": ["navigate"] },
+      { "trigger_id": "trigger:/|Get Started", "route": "/", "label": "Get Started", "probed": true, "hasSurface": true, "observed": true, "status": "fully_covered", "effects": ["navigate"] },
+      { "trigger_id": "trigger:/docs|Search", "route": "/docs", "label": "Search", "probed": true, "hasSurface": false, "observed": true, "status": "partial", "effects": ["filter"] },
+      { "trigger_id": "trigger:/settings|Delete Account", "route": "/settings", "label": "Delete Account", "probed": true, "hasSurface": true, "observed": false, "status": "untested", "effects": [] },
+      { "trigger_id": "trigger:/|More...", "route": "/", "label": "More...", "probed": true, "hasSurface": false, "observed": false, "status": "untested", "effects": [] }
+    ],
+    "summary": { "total": 5, "fully_covered": 2, "partial": 1, "untested": 2, "surprise": 0, "coverage_percent": 40 },
+    "surprises": [],
+    "surprises_v2": []
+  },
+
+  "atlas": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "features": [
+      { "id": "documentation", "name": "Documentation", "synonyms": ["docs"], "sources": [{ "file": "README.md", "line": 10, "type": "heading", "section": "Features" }], "expected_entrypoints": [] },
+      { "id": "search", "name": "Search", "synonyms": ["find"], "sources": [{ "file": "README.md", "line": 15, "type": "bullet", "section": "Features" }], "expected_entrypoints": [] },
+      { "id": "api-keys", "name": "API Keys", "synonyms": [], "sources": [{ "file": "README.md", "line": 30, "type": "bullet", "section": "Advanced" }], "expected_entrypoints": [] }
+    ],
+    "stats": { "files_scanned": 1, "features_extracted": 3, "tag_count": 0 }
+  },
+
+  "graph_empty": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [],
+    "edges": [],
+    "stats": {
+      "total_nodes": 0,
+      "by_type": { "trigger": 0, "surface": 0, "effect": 0, "route": 0, "feature": 0 },
+      "total_edges": 0,
+      "by_edge_type": { "contains": 0, "navigates_to": 0, "maps_to": 0, "produces": 0, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  },
+
+  "diff_empty": {
+    "version": "1.1.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "matched": [],
+    "documented_not_discoverable": [],
+    "discoverable_not_documented": [],
+    "burial_index": [],
+    "stats": {
+      "total_features": 0, "total_triggers": 0, "total_surfaces": 0,
+      "matched": 0, "documented_not_discoverable": 0, "discoverable_not_documented": 0,
+      "ambiguous_matches": 0, "coverage_percent": 0,
+      "top_failure_reasons": {}, "top_suggested_rules": {}
+    }
+  },
+
+  "graph_multipage": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "route:/about", "type": "route", "label": "/about", "route": "/about", "meta": {} },
+      { "id": "route:/docs", "type": "route", "label": "/docs", "route": "/docs", "meta": {} },
+
+      { "id": "trigger:/|Tools", "type": "trigger", "label": "Tools", "route": "/", "meta": { "element": "a", "selector": "nav a.tools", "parent_nav": true, "depth": 0, "href": "/tools" } },
+      { "id": "trigger:/|About", "type": "trigger", "label": "About", "route": "/", "meta": { "element": "a", "selector": "nav a.about", "parent_nav": true, "depth": 0, "href": "/about" } },
+      { "id": "trigger:/about|Tools", "type": "trigger", "label": "Tools", "route": "/about", "meta": { "element": "a", "selector": "nav a.tools", "parent_nav": true, "depth": 0, "href": "/tools" } },
+      { "id": "trigger:/about|About", "type": "trigger", "label": "About", "route": "/about", "meta": { "element": "a", "selector": "nav a.about", "parent_nav": true, "depth": 0, "href": "/about" } },
+      { "id": "trigger:/docs|Tools", "type": "trigger", "label": "Tools", "route": "/docs", "meta": { "element": "a", "selector": "nav a.tools", "parent_nav": true, "depth": 0, "href": "/tools" } },
+      { "id": "trigger:/docs|About", "type": "trigger", "label": "About", "route": "/docs", "meta": { "element": "a", "selector": "nav a.about", "parent_nav": true, "depth": 0, "href": "/about" } },
+
+      { "id": "surface:link-tools", "type": "surface", "label": "tools", "route": "/", "meta": { "role": "LINK", "pattern": null, "styleTokens": ["primary"] } },
+      { "id": "surface:link-about", "type": "surface", "label": "about", "route": "/", "meta": { "role": "LINK", "pattern": null, "styleTokens": [] } },
+
+      { "id": "effect:navigate:/tools", "type": "effect", "label": "navigate → /tools", "meta": { "kind": "navigate", "event": "click", "route": "/" } },
+      { "id": "effect:navigate:/about", "type": "effect", "label": "navigate → /about", "meta": { "kind": "navigate", "event": "click", "route": "/" } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Tools", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|About", "type": "contains" },
+      { "from": "route:/about", "to": "trigger:/about|Tools", "type": "contains" },
+      { "from": "route:/about", "to": "trigger:/about|About", "type": "contains" },
+      { "from": "route:/docs", "to": "trigger:/docs|Tools", "type": "contains" },
+      { "from": "route:/docs", "to": "trigger:/docs|About", "type": "contains" },
+
+      { "from": "trigger:/|Tools", "to": "surface:link-tools", "type": "maps_to", "weight": 0.9 },
+      { "from": "trigger:/|About", "to": "surface:link-about", "type": "maps_to", "weight": 0.9 },
+      { "from": "trigger:/about|Tools", "to": "surface:link-tools", "type": "maps_to", "weight": 0.9 },
+      { "from": "trigger:/about|About", "to": "surface:link-about", "type": "maps_to", "weight": 0.9 },
+      { "from": "trigger:/docs|Tools", "to": "surface:link-tools", "type": "maps_to", "weight": 0.9 },
+      { "from": "trigger:/docs|About", "to": "surface:link-about", "type": "maps_to", "weight": 0.9 },
+
+      { "from": "surface:link-tools", "to": "effect:navigate:/tools", "type": "produces", "meta": { "event": "click", "intent": "navigate" } },
+      { "from": "surface:link-about", "to": "effect:navigate:/about", "type": "produces", "meta": { "event": "click", "intent": "navigate" } }
+    ],
+    "stats": {
+      "total_nodes": 12,
+      "by_type": { "trigger": 6, "surface": 2, "effect": 2, "route": 3, "feature": 0 },
+      "total_edges": 14,
+      "by_edge_type": { "contains": 6, "navigates_to": 0, "maps_to": 6, "produces": 2, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  },
+
+  "diff_multipage": {
+    "version": "1.1.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "matched": [],
+    "documented_not_discoverable": [],
+    "discoverable_not_documented": [],
+    "burial_index": [
+      { "trigger_label": "Tools", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "About", "route": "/", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Tools", "route": "/about", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "About", "route": "/about", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "Tools", "route": "/docs", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 },
+      { "trigger_label": "About", "route": "/docs", "depth": 0, "in_primary_nav": true, "behind_overflow": false, "burial_score": 0 }
+    ],
+    "stats": {
+      "total_features": 0, "total_triggers": 6, "total_surfaces": 2,
+      "matched": 0, "documented_not_discoverable": 0, "discoverable_not_documented": 0,
+      "ambiguous_matches": 0, "coverage_percent": 0,
+      "top_failure_reasons": {}, "top_suggested_rules": {}
+    }
+  },
+
+  "graph_hub": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "route:/hub", "type": "route", "label": "/hub", "route": "/hub", "meta": {} },
+      { "id": "route:/a", "type": "route", "label": "/a", "route": "/a", "meta": {} },
+      { "id": "route:/b", "type": "route", "label": "/b", "route": "/b", "meta": {} },
+      { "id": "route:/c", "type": "route", "label": "/c", "route": "/c", "meta": {} },
+      { "id": "route:/d", "type": "route", "label": "/d", "route": "/d", "meta": {} },
+      { "id": "route:/e", "type": "route", "label": "/e", "route": "/e", "meta": {} },
+
+      { "id": "trigger:/|Go Hub", "type": "trigger", "label": "Go Hub", "route": "/", "meta": { "element": "a", "parent_nav": true, "depth": 0, "href": "/hub" } },
+      { "id": "trigger:/hub|Link A", "type": "trigger", "label": "Link A", "route": "/hub", "meta": { "element": "a", "parent_nav": false, "depth": 1, "href": "/a" } },
+      { "id": "trigger:/hub|Link B", "type": "trigger", "label": "Link B", "route": "/hub", "meta": { "element": "a", "parent_nav": false, "depth": 1, "href": "/b" } },
+      { "id": "trigger:/hub|Link C", "type": "trigger", "label": "Link C", "route": "/hub", "meta": { "element": "a", "parent_nav": false, "depth": 1, "href": "/c" } },
+      { "id": "trigger:/hub|Link D", "type": "trigger", "label": "Link D", "route": "/hub", "meta": { "element": "a", "parent_nav": false, "depth": 1, "href": "/d" } },
+      { "id": "trigger:/hub|Link E", "type": "trigger", "label": "Link E", "route": "/hub", "meta": { "element": "a", "parent_nav": false, "depth": 1, "href": "/e" } },
+      { "id": "trigger:/a|Back Hub", "type": "trigger", "label": "Back Hub", "route": "/a", "meta": { "element": "a", "parent_nav": false, "depth": 1, "href": "/hub" } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Go Hub", "type": "contains" },
+      { "from": "route:/hub", "to": "trigger:/hub|Link A", "type": "contains" },
+      { "from": "route:/hub", "to": "trigger:/hub|Link B", "type": "contains" },
+      { "from": "route:/hub", "to": "trigger:/hub|Link C", "type": "contains" },
+      { "from": "route:/hub", "to": "trigger:/hub|Link D", "type": "contains" },
+      { "from": "route:/hub", "to": "trigger:/hub|Link E", "type": "contains" },
+      { "from": "route:/a", "to": "trigger:/a|Back Hub", "type": "contains" },
+
+      { "from": "trigger:/|Go Hub", "to": "route:/hub", "type": "navigates_to" },
+      { "from": "trigger:/hub|Link A", "to": "route:/a", "type": "navigates_to" },
+      { "from": "trigger:/hub|Link B", "to": "route:/b", "type": "navigates_to" },
+      { "from": "trigger:/hub|Link C", "to": "route:/c", "type": "navigates_to" },
+      { "from": "trigger:/hub|Link D", "to": "route:/d", "type": "navigates_to" },
+      { "from": "trigger:/hub|Link E", "to": "route:/e", "type": "navigates_to" },
+      { "from": "trigger:/a|Back Hub", "to": "route:/hub", "type": "navigates_to" }
+    ],
+    "stats": {
+      "total_nodes": 14,
+      "by_type": { "trigger": 7, "surface": 0, "effect": 0, "route": 7, "feature": 0 },
+      "total_edges": 14,
+      "by_edge_type": { "contains": 7, "navigates_to": 7, "maps_to": 0, "produces": 0, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  },
+
+  "graph_goal": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "route:/tools", "type": "route", "label": "/tools", "route": "/tools", "meta": {} },
+      { "id": "route:/tools/my-tool", "type": "route", "label": "/tools/my-tool", "route": "/tools/my-tool", "meta": {} },
+
+      { "id": "trigger:/|Browse Tools", "type": "trigger", "label": "Browse Tools", "route": "/", "meta": { "element": "a", "parent_nav": true, "depth": 0, "href": "/tools" } },
+      { "id": "trigger:/tools|My Tool", "type": "trigger", "label": "My Tool", "route": "/tools", "meta": { "element": "a", "parent_nav": false, "depth": 1, "href": "/tools/my-tool" } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Browse Tools", "type": "contains" },
+      { "from": "route:/tools", "to": "trigger:/tools|My Tool", "type": "contains" },
+      { "from": "trigger:/|Browse Tools", "to": "route:/tools", "type": "navigates_to" },
+      { "from": "trigger:/tools|My Tool", "to": "route:/tools/my-tool", "type": "navigates_to" }
+    ],
+    "stats": {
+      "total_nodes": 5,
+      "by_type": { "trigger": 2, "surface": 0, "effect": 0, "route": 3, "feature": 0 },
+      "total_edges": 4,
+      "by_edge_type": { "contains": 2, "navigates_to": 2, "maps_to": 0, "produces": 0, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  },
+
+  "atlas_noisy": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "features": [
+      { "id": "tool-compass", "name": "Tool Compass", "synonyms": ["compass"], "sources": [{ "file": "README.md", "line": 10, "type": "bullet", "section": "Featured Tools" }], "expected_entrypoints": [] },
+      { "id": "do-not-abbreviate-to-mcts", "name": "Do not abbreviate to MCTS or MTS in published copy.", "synonyms": [], "sources": [{ "file": "docs/presskit.md", "line": 50, "type": "bullet", "section": "Name" }], "expected_entrypoints": [] },
+      { "id": "use-the-logo-at-its-original-aspect", "name": "Use the logo at its original aspect ratio (3:2) and do not distort it.", "synonyms": [], "sources": [{ "file": "docs/presskit.md", "line": 60, "type": "bullet", "section": "Usage rules" }], "expected_entrypoints": [] },
+      { "id": "preferred-background", "name": "Preferred background", "synonyms": [], "sources": [{ "file": "docs/presskit.md", "line": 65, "type": "bullet", "section": "Usage rules" }], "expected_entrypoints": [] }
+    ],
+    "stats": { "files_scanned": 2, "features_extracted": 4, "tag_count": 0 }
+  },
+
+  "diff_noisy": {
+    "version": "1.1.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "matched": [],
+    "documented_not_discoverable": [
+      { "feature_id": "tool-compass", "feature_name": "Tool Compass", "sources": ["README.md:10"], "failure_reason": "missing_surface", "top_candidates": [], "suggestions": [], "reason": "No matching trigger or surface found" },
+      { "feature_id": "do-not-abbreviate-to-mcts", "feature_name": "Do not abbreviate to MCTS or MTS in published copy.", "sources": ["docs/presskit.md:50"], "failure_reason": "missing_surface", "top_candidates": [], "suggestions": [], "reason": "No matching trigger or surface found" },
+      { "feature_id": "use-the-logo-at-its-original-aspect", "feature_name": "Use the logo at its original aspect ratio (3:2) and do not distort it.", "sources": ["docs/presskit.md:60"], "failure_reason": "missing_surface", "top_candidates": [], "suggestions": [], "reason": "No matching trigger or surface found" },
+      { "feature_id": "preferred-background", "feature_name": "Preferred background", "sources": ["docs/presskit.md:65"], "failure_reason": "missing_surface", "top_candidates": [], "suggestions": [], "reason": "No matching trigger or surface found" }
+    ],
+    "discoverable_not_documented": [],
+    "burial_index": [],
+    "stats": {
+      "total_features": 4, "total_triggers": 0, "total_surfaces": 0,
+      "matched": 0, "documented_not_discoverable": 4, "discoverable_not_documented": 0,
+      "ambiguous_matches": 0, "coverage_percent": 0,
+      "top_failure_reasons": { "missing_surface": 4 }, "top_suggested_rules": {}
+    }
+  },
+
+  "graph_nav_hub": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/", "type": "route", "label": "/", "route": "/", "meta": {} },
+      { "id": "route:/a", "type": "route", "label": "/a", "route": "/a", "meta": {} },
+      { "id": "route:/b", "type": "route", "label": "/b", "route": "/b", "meta": {} },
+      { "id": "route:/c", "type": "route", "label": "/c", "route": "/c", "meta": {} },
+      { "id": "route:/d", "type": "route", "label": "/d", "route": "/d", "meta": {} },
+      { "id": "route:/e", "type": "route", "label": "/e", "route": "/e", "meta": {} },
+      { "id": "trigger:/|Nav A", "type": "trigger", "label": "Nav A", "route": "/", "meta": { "element": "a", "selector": "nav a", "parent_nav": true, "depth": 0, "href": "/a" } },
+      { "id": "trigger:/|Nav B", "type": "trigger", "label": "Nav B", "route": "/", "meta": { "element": "a", "selector": "nav a", "parent_nav": true, "depth": 0, "href": "/b" } },
+      { "id": "trigger:/|Nav C", "type": "trigger", "label": "Nav C", "route": "/", "meta": { "element": "a", "selector": "nav a", "parent_nav": true, "depth": 0, "href": "/c" } },
+      { "id": "trigger:/|Nav D", "type": "trigger", "label": "Nav D", "route": "/", "meta": { "element": "a", "selector": "nav a", "parent_nav": true, "depth": 0, "href": "/d" } },
+      { "id": "trigger:/|Nav E", "type": "trigger", "label": "Nav E", "route": "/", "meta": { "element": "a", "selector": "nav a", "parent_nav": true, "depth": 0, "href": "/e" } },
+      { "id": "trigger:/|Content Link", "type": "trigger", "label": "Content Link", "route": "/", "meta": { "element": "a", "selector": "a.content", "parent_nav": false, "depth": 0, "href": "/a" } }
+    ],
+    "edges": [
+      { "from": "route:/", "to": "trigger:/|Nav A", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Nav B", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Nav C", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Nav D", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Nav E", "type": "contains" },
+      { "from": "route:/", "to": "trigger:/|Content Link", "type": "contains" },
+      { "from": "trigger:/|Nav A", "to": "route:/a", "type": "navigates_to" },
+      { "from": "trigger:/|Nav B", "to": "route:/b", "type": "navigates_to" },
+      { "from": "trigger:/|Nav C", "to": "route:/c", "type": "navigates_to" },
+      { "from": "trigger:/|Nav D", "to": "route:/d", "type": "navigates_to" },
+      { "from": "trigger:/|Nav E", "to": "route:/e", "type": "navigates_to" },
+      { "from": "trigger:/|Content Link", "to": "route:/a", "type": "navigates_to" }
+    ],
+    "stats": {
+      "total_nodes": 12,
+      "by_type": { "trigger": 6, "surface": 0, "effect": 0, "route": 6, "feature": 0 },
+      "total_edges": 12,
+      "by_edge_type": { "contains": 6, "navigates_to": 6, "maps_to": 0, "produces": 0, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  },
+
+  "graph_nav_loop": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/x", "type": "route", "label": "/x", "route": "/x", "meta": {} },
+      { "id": "route:/y", "type": "route", "label": "/y", "route": "/y", "meta": {} },
+      { "id": "trigger:/x|Go Y", "type": "trigger", "label": "Go Y", "route": "/x", "meta": { "element": "a", "selector": "nav a", "parent_nav": true, "depth": 0, "href": "/y" } },
+      { "id": "trigger:/y|Go X", "type": "trigger", "label": "Go X", "route": "/y", "meta": { "element": "a", "selector": "nav a", "parent_nav": true, "depth": 0, "href": "/x" } }
+    ],
+    "edges": [
+      { "from": "route:/x", "to": "trigger:/x|Go Y", "type": "contains" },
+      { "from": "route:/y", "to": "trigger:/y|Go X", "type": "contains" },
+      { "from": "trigger:/x|Go Y", "to": "route:/y", "type": "navigates_to" },
+      { "from": "trigger:/y|Go X", "to": "route:/x", "type": "navigates_to" }
+    ],
+    "stats": {
+      "total_nodes": 4,
+      "by_type": { "trigger": 2, "surface": 0, "effect": 0, "route": 2, "feature": 0 },
+      "total_edges": 4,
+      "by_edge_type": { "contains": 2, "navigates_to": 2, "maps_to": 0, "produces": 0, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  },
+
+  "graph_loop": {
+    "version": "1.0.0",
+    "generated_at": "2026-03-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "route:/a", "type": "route", "label": "/a", "route": "/a", "meta": {} },
+      { "id": "route:/b", "type": "route", "label": "/b", "route": "/b", "meta": {} },
+      { "id": "trigger:/a|Go B", "type": "trigger", "label": "Go B", "route": "/a", "meta": { "element": "a", "selector": "a.go-b", "parent_nav": true, "depth": 0, "href": "/b" } },
+      { "id": "trigger:/b|Go A", "type": "trigger", "label": "Go A", "route": "/b", "meta": { "element": "a", "selector": "a.go-a", "parent_nav": true, "depth": 1, "href": "/a" } }
+    ],
+    "edges": [
+      { "from": "route:/a", "to": "trigger:/a|Go B", "type": "contains" },
+      { "from": "route:/b", "to": "trigger:/b|Go A", "type": "contains" },
+      { "from": "trigger:/a|Go B", "to": "route:/b", "type": "navigates_to" },
+      { "from": "trigger:/b|Go A", "to": "route:/a", "type": "navigates_to" }
+    ],
+    "stats": {
+      "total_nodes": 4,
+      "by_type": { "trigger": 2, "surface": 0, "effect": 0, "route": 2, "feature": 0 },
+      "total_edges": 4,
+      "by_edge_type": { "contains": 2, "navigates_to": 2, "maps_to": 0, "produces": 0, "writes": 0, "documents": 0 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  }
+}

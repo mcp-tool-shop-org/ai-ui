@@ -1,0 +1,173 @@
+{
+  "coverageReport": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "triggers": [
+      { "trigger_id": "trigger:/|B", "route": "/", "label": "B", "probed": true, "hasSurface": false, "observed": true, "status": "partial", "effects": ["fetch"] },
+      { "trigger_id": "trigger:/|A", "route": "/", "label": "A", "probed": true, "hasSurface": true, "observed": true, "status": "fully_covered", "effects": ["navigate"] },
+      { "trigger_id": "trigger:/|C", "route": "/", "label": "C", "probed": true, "hasSurface": false, "observed": false, "status": "untested", "effects": [] }
+    ],
+    "summary": {
+      "total": 3,
+      "fully_covered": 1,
+      "partial": 1,
+      "untested": 1,
+      "surprise": 0,
+      "coverage_percent": 33
+    },
+    "surprises": [],
+    "surprises_v2": [
+      { "trigger_id": "trigger:/|Y", "label": "Y", "route": "/", "category": "risky_skipped", "detail": "Destructive trigger" },
+      { "trigger_id": "trigger:/|X", "label": "X", "route": "/", "category": "new_effect", "detail": "New runtime trigger" },
+      { "trigger_id": "trigger:/|Z", "label": "Z", "route": "/", "category": "missing_expected", "expected_id": "effect:submit:/", "detail": "Expected effect not observed" }
+    ]
+  },
+
+  "actionReport": {
+    "version": "7.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "actions": [
+      { "actionId": "act:ccc00003", "type": "review_new_effect", "priority": 15, "impact": 0, "risk": "caution", "effort": "low", "rationale": "New runtime trigger", "triggerId": "trigger:/|X" },
+      { "actionId": "act:aaa00001", "type": "probe_trigger", "priority": 10, "impact": 5, "risk": "safe", "effort": "low", "rationale": "Probe trigger A", "triggerId": "trigger:/|A" },
+      { "actionId": "act:bbb00002", "type": "investigate_missing", "priority": 20, "impact": 5, "risk": "caution", "effort": "med", "rationale": "Missing expected effect", "triggerId": "trigger:/|B", "effectId": "effect:submit:/" }
+    ],
+    "next_best_probes": [
+      { "trigger_id": "trigger:/|C", "label": "C", "route": "/", "score": 4, "reasons": ["untested"], "risk": "safe" }
+    ],
+    "summary": {
+      "total_actions": 3,
+      "by_type": { "probe_trigger": 1, "investigate_missing": 1, "review_new_effect": 1 },
+      "estimated_coverage_gain": 8
+    }
+  },
+
+  "runtimeEffectsSummary": {
+    "version": "1.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "url": "http://localhost:4321",
+    "triggers": [
+      {
+        "trigger_id": "trigger:/|A",
+        "route": "/",
+        "label": "A",
+        "effects": [
+          { "kind": "fetch", "trigger_id": "trigger:/|A", "route": "/", "window_ms": 1500, "method": "GET", "url": "http://localhost:4321/api/data?token=secret123&session=abc", "status": 200 },
+          { "kind": "navigate", "trigger_id": "trigger:/|A", "route": "/", "window_ms": 1500, "from": "http://localhost:4321/?ref=home#section", "to": "http://localhost:4321/about?utm_source=app" }
+        ]
+      },
+      {
+        "trigger_id": "trigger:/|B",
+        "route": "/",
+        "label": "B",
+        "effects": [
+          { "kind": "storageWrite", "trigger_id": "trigger:/|B", "route": "/", "window_ms": 500, "scope": "local", "key": "user_pref" }
+        ]
+      }
+    ],
+    "stats": {
+      "total_triggers": 3,
+      "triggers_fired": 2,
+      "triggers_skipped": 1,
+      "effects_captured": 3,
+      "by_kind": { "fetch": 1, "navigate": 1, "storageWrite": 1 }
+    }
+  },
+
+  "graph": {
+    "version": "2.0.0",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "nodes": [
+      { "id": "trigger:B", "type": "trigger", "label": "B", "route": "/", "meta": {} },
+      { "id": "feature:search", "type": "feature", "label": "Search", "meta": {} },
+      { "id": "trigger:A", "type": "trigger", "label": "A", "route": "/", "meta": {} }
+    ],
+    "edges": [
+      { "from": "trigger:B", "to": "feature:search", "type": "maps_to", "weight": 0.8 },
+      { "from": "trigger:A", "to": "feature:search", "type": "maps_to", "weight": 0.9 }
+    ],
+    "stats": {
+      "total_nodes": 3,
+      "by_type": { "trigger": 2, "feature": 1 },
+      "total_edges": 2,
+      "by_edge_type": { "maps_to": 2 },
+      "orphan_features": 0,
+      "orphan_triggers": 0
+    }
+  },
+
+  "baselineSlice": {
+    "coverage_percent": 33,
+    "total_actions": 3,
+    "actions_by_type": { "probe_trigger": 1, "investigate_missing": 1, "review_new_effect": 1 },
+    "action_ids": ["act:aaa00001", "act:bbb00002", "act:ccc00003"],
+    "tool_version": "1.0.0",
+    "config_hash": "abc123"
+  },
+
+  "minimalConfig": {
+    "docs": { "globs": ["README.md"], "cliHelp": null },
+    "probe": { "baseUrl": "http://localhost:4321", "routes": ["/"], "maxDepth": 3, "timeout": 30000, "skipLabels": [], "safeOverride": "data-aiui-safe" },
+    "mapping": {},
+    "output": {
+      "atlas": "ai-ui-output/atlas.json",
+      "probe": "ai-ui-output/probe.jsonl",
+      "diff": "ai-ui-output/diff.json",
+      "diffReport": "ai-ui-output/diff.md",
+      "surfaces": "ai-ui-output/probe.surfaces.json",
+      "graph": "ai-ui-output/trigger-graph.json",
+      "graphReport": "ai-ui-output/trigger-graph.md",
+      "graphDot": "ai-ui-output/trigger-graph.dot",
+      "composePlan": "ai-ui-output/surfacing-plan.json",
+      "composeReport": "ai-ui-output/surfacing-plan.md",
+      "composeDot": "ai-ui-output/surfacing-plan.dot",
+      "verify": "ai-ui-output/verification.json",
+      "verifyReport": "ai-ui-output/verification.md",
+      "baseline": "ai-ui-output/baseline.json",
+      "mustSurface": "ai-ui-output/must-surface.json",
+      "prComment": "ai-ui-output/pr-comment.md",
+      "prCommentJson": "ai-ui-output/pr-comment.json",
+      "runtimeEffects": "ai-ui-output/runtime-effects.jsonl",
+      "runtimeEffectsSummary": "ai-ui-output/runtime-effects.summary.json",
+      "runtimeCoverage": "ai-ui-output/runtime-coverage.json",
+      "runtimeCoverageReport": "ai-ui-output/runtime-coverage.md",
+      "actionSummary": "ai-ui-output/action-summary.json",
+      "replayPack": "ai-ui-output"
+    },
+    "verify": { "maxOrphanRatio": 0.25, "maxUndocumentedSurfaces": 10, "failOnP0Orphans": true },
+    "baseline": { "failOnOrphanIncrease": true, "maxUndocumentedIncrease": 5, "warnOnCoverageDecrease": true },
+    "memory": { "dir": "ai-ui-memory", "strict": false },
+    "runtimeEffects": {
+      "routes": ["/"],
+      "maxTriggersPerRoute": 20,
+      "windowMs": 2500,
+      "safe": {
+        "denyLabelRegex": "delete|remove",
+        "requireSafeAttrForDestructive": true,
+        "denyHrefRegex": null,
+        "denyMethodPatterns": []
+      }
+    },
+    "coverageGate": { "minCoveragePercent": 0, "maxTotalActions": 999, "maxActionsByType": null }
+  },
+
+  "invalidPack_noVersion": {
+    "manifest": {},
+    "artifacts": {}
+  },
+
+  "invalidPack_noManifest": {
+    "version": "1.0.0",
+    "artifacts": {}
+  },
+
+  "invalidPack_noArtifacts": {
+    "version": "1.0.0",
+    "manifest": {}
+  },
+
+  "invalidPack_wrongVersion": {
+    "version": "2.0.0",
+    "manifest": { "tool": { "name": "ai-ui", "version": "1.0.0" } },
+    "artifacts": {}
+  }
+}

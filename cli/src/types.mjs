@@ -3,9 +3,10 @@
 /**
  * @typedef {Object} AiUiConfig
  * @property {{ globs: string[], cliHelp: string|null }} docs
- * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string }} probe
+ * @property {{ baseUrl: string, routes: string[], maxDepth: number, timeout: number, skipLabels: string[], safeOverride: string, basePath: string, goalRoutes: string[] }} probe
+ * @property {Record<string, string[]>} featureAliases
  * @property {Record<string, string>} mapping
- * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string }} output
+ * @property {{ atlas: string, probe: string, diff: string, diffReport: string, surfaces: string, graph: string, graphReport: string, graphDot: string, composePlan: string, composeReport: string, composeDot: string, verify: string, verifyReport: string, baseline: string, mustSurface: string, prComment: string, prCommentJson: string, runtimeEffects: string, runtimeEffectsSummary: string, runtimeCoverage: string, runtimeCoverageReport: string, actionSummary: string, replayPack: string, replayDiff: string, replayDiffReport: string, replayDiffSummary: string, designSurfaceInventory: string, designSurfaceInventoryReport: string, designFeatureMap: string, designFeatureMapReport: string, designTaskFlows: string, designIAProposal: string }} output
  * @property {VerifyConfig} verify
  * @property {BaselineConfig} baseline
  * @property {MemoryConfig} memory
@@ -639,6 +640,239 @@
  * @property {Record<string, number>} by_surprise_category
  * @property {string[]} top_action_ids         - first 5 by priority
  * @property {number} coverage_percent
+ */
+
+// =============================================================================
+// Phase 9: Replay Pack types
+// =============================================================================
+
+/**
+ * @typedef {Object} ReplayInputEntry
+ * @property {string} key           - Artifact key (e.g. 'runtimeCoverage')
+ * @property {string} sha256        - SHA-256 of canonical artifact content
+ * @property {boolean} present      - Whether this artifact was present in the pack
+ */
+
+/**
+ * @typedef {Object} ReplayConfigSnapshot
+ * @property {string} verify_config_hash   - SHA-256 of verify config
+ * @property {string} safe_config_hash     - SHA-256 of runtimeEffects.safe config
+ * @property {import('./types.mjs').CoverageGateConfig} coverage_gate - Gate config used
+ */
+
+/**
+ * @typedef {Object} ReplaySummary
+ * @property {number} coverage_percent
+ * @property {number} total_actions
+ * @property {import('./types.mjs').GateMode} gate_mode
+ * @property {boolean} gate_pass
+ * @property {Record<string, number>} actions_by_type
+ * @property {Record<string, number>} surprises_by_category
+ */
+
+/**
+ * @typedef {Object} ReplayManifest
+ * @property {{ name: string, version: string }} tool
+ * @property {string} created_at
+ * @property {ReplayConfigSnapshot} config_snapshot
+ * @property {ReplayInputEntry[]} inputs
+ * @property {ReplaySummary} summary
+ * @property {import('./types.mjs').CoverageBaselineSlice|null} baseline_slice
+ */
+
+/**
+ * @typedef {Object} ReplayPack
+ * @property {string} version
+ * @property {ReplayManifest} manifest
+ * @property {Record<string, any>} artifacts
+ */
+
+// =============================================================================
+// Phase 10: Replay Diff types
+// =============================================================================
+
+/**
+ * @typedef {Object} ManifestDiff
+ * @property {{ a: string, b: string, match: boolean }} tool_version
+ * @property {{ a: string, b: string, match: boolean }} verify_config_hash
+ * @property {{ a: string, b: string, match: boolean }} safe_config_hash
+ * @property {{ a: any, b: any, match: boolean }} coverage_gate
+ * @property {{ a: string, b: string }} created_at
+ */
+
+/**
+ * @typedef {Object} TriggerStatusTransition
+ * @property {string} trigger_id
+ * @property {string} label
+ * @property {string} route
+ * @property {CoverageStatus|null} status_a
+ * @property {CoverageStatus|null} status_b
+ */
+
+/**
+ * @typedef {Object} ScalarDelta
+ * @property {number} a
+ * @property {number} b
+ * @property {number} change
+ */
+
+/**
+ * @typedef {Object} CoverageDelta
+ * @property {ScalarDelta} coverage_percent
+ * @property {ScalarDelta} fully_covered
+ * @property {ScalarDelta} partial
+ * @property {ScalarDelta} untested
+ * @property {ScalarDelta} surprise
+ * @property {TriggerStatusTransition[]} transitions
+ */
+
+/**
+ * @typedef {Object} ActionsDelta
+ * @property {CoverageAction[]} added
+ * @property {CoverageAction[]} removed
+ * @property {ScalarDelta} total_actions
+ * @property {{ a: Record<string, number>, b: Record<string, number> }} by_type
+ */
+
+/**
+ * @typedef {Object} SurprisesDelta
+ * @property {{ a: Record<string, number>, b: Record<string, number>, change: Record<string, number> }} by_category
+ * @property {SurpriseEntryV2[]} added
+ * @property {SurpriseEntryV2[]} removed
+ */
+
+/**
+ * @typedef {Object} DriftDiagnostic
+ * @property {string} trigger_id
+ * @property {string} label
+ * @property {string} route
+ * @property {string} expected_id
+ * @property {string} observed_id
+ * @property {'added'|'removed'|'unchanged'} status
+ */
+
+/**
+ * @typedef {Object} ReplayDiff
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {{ a: string, b: string }} pack_paths
+ * @property {ManifestDiff} manifest
+ * @property {CoverageDelta} coverage
+ * @property {ActionsDelta} actions
+ * @property {SurprisesDelta} surprises
+ * @property {DriftDiagnostic[]} drift_diagnostics
+ */
+
+/**
+ * @typedef {Object} ReplayDiffSummary
+ * @property {string} version
+ * @property {{ a: string, b: string }} pack_paths
+ * @property {number} coverage_change
+ * @property {number} actions_added
+ * @property {number} actions_removed
+ * @property {number} transitions_count
+ * @property {number} drift_count
+ * @property {Record<string, number>} surprises_change
+ * @property {boolean} config_match
+ */
+
+// =============================================================================
+// Stage 0B: Design Map types
+// =============================================================================
+
+/** @typedef {'primary_nav'|'secondary_nav'|'toolbar'|'overflow'|'settings'|'modal'|'inline'|'footer'} LocationGroup */
+
+/**
+ * @typedef {Object} SurfaceInventoryEntry
+ * @property {string} route
+ * @property {string} label
+ * @property {string} role           - BUTTON, LINK, INPUT, etc.
+ * @property {string|null} selector  - CSS selector or stable id
+ * @property {LocationGroup} location
+ * @property {'safe'|'destructive'|'unknown'} safety
+ * @property {string[]} linked_triggers
+ * @property {string[]} linked_effects
+ * @property {number} depth
+ * @property {number} [route_coverage]    - Number of routes this item appears on (deduplicated entries only)
+ * @property {number} [coverage_percent]  - route_coverage / total_routes (deduplicated entries only)
+ */
+
+/**
+ * @typedef {Object} DesignSurfaceInventory
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {Record<LocationGroup, SurfaceInventoryEntry[]>} groups
+ * @property {{ primary_nav: SurfaceInventoryEntry[], secondary_nav: SurfaceInventoryEntry[] }} [deduplicated]
+ * @property {{ total: number, unique: number, by_location: Record<string, number>, by_location_unique: Record<string, number>, destructive_count: number, total_routes: number }} stats
+ */
+
+/**
+ * @typedef {Object} FeatureMapEntry
+ * @property {string} feature_id
+ * @property {string} feature_name
+ * @property {string[]} entry_points
+ * @property {Record<string, number>} click_depth
+ * @property {number} discoverability  - 0.0 (visible) to 1.0 (hidden)
+ * @property {number} runtime_confidence - 0.0 to 1.0
+ * @property {'promote'|'keep'|'demote'|'merge'|'rename'|'skip'} recommended_action
+ * @property {string} rationale
+ * @property {boolean} from_atlas
+ */
+
+/**
+ * @typedef {Object} DesignFeatureMap
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {FeatureMapEntry[]} features
+ * @property {{ total: number, from_atlas: number, auto_clustered: number, promote_count: number, demote_count: number, ungrounded_count: number }} stats
+ */
+
+/**
+ * @typedef {Object} TaskFlowStep
+ * @property {string} trigger_label
+ * @property {string} route
+ * @property {'navigate'|'action'|'confirmation'|'dead_end'} step_type
+ * @property {string[]} effects
+ * @property {boolean} is_destructive
+ */
+
+/**
+ * @typedef {Object} TaskFlow
+ * @property {string} task_name
+ * @property {TaskFlowStep[]} steps
+ * @property {boolean} has_dead_end
+ * @property {boolean} has_loop
+ * @property {'browse_loop'|'circular'|'nav_loop'|null} loop_type  - null if no loop
+ * @property {boolean} goal_reached         - true if flow reaches a detail/docs/install page
+ * @property {boolean} has_destructive_step
+ * @property {number} total_depth
+ */
+
+/**
+ * @typedef {Object} IAProposalItem
+ * @property {string} label
+ * @property {string} route
+ * @property {string} reason
+ */
+
+/**
+ * @typedef {Object} DesignIAProposal
+ * @property {string} version
+ * @property {string} generated_at
+ * @property {IAProposalItem[]} primary_nav
+ * @property {IAProposalItem[]} secondary_nav
+ * @property {IAProposalItem[]} must_surface
+ * @property {IAProposalItem[]} documented_non_surface
+ * @property {IAProposalItem[]} demote_to_advanced
+ * @property {IAConversionPath[]} [conversion_paths]
+ * @property {string[]} grouping_notes
+ */
+
+/**
+ * @typedef {Object} IAConversionPath
+ * @property {string} from_label   - Nav item label
+ * @property {string} to_route     - Goal route
+ * @property {boolean} goal_reached
  */
 
 export {};

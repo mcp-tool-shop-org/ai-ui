@@ -4,7 +4,7 @@ import MarkdownIt from 'markdown-it';
 const md = new MarkdownIt();
 
 /** Sections whose children are treated as feature candidates. */
-const FEATURE_SECTIONS = [
+export const FEATURE_SECTIONS = [
   'features', 'commands', 'tools', 'api', 'usage',
   'what\'s inside', 'capabilities', 'plugins', 'modules',
   'principles', 'design tokens', 'highlights', 'overview',

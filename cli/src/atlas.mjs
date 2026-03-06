@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'node:fs';
 import { resolve, relative, dirname, join } from 'node:path';
 import { parseMarkdown } from './markdown.mjs';
-import { kebabCase } from './normalize.mjs';
+import { kebabCase, matchScore } from './normalize.mjs';
 import { fail } from './config.mjs';
 
 /**
@@ -69,8 +69,9 @@ export async function runAtlas(config, flags) {
     }
   }
 
-  // Sort features deterministically by ID
-  const features = [...featureMap.values()].sort((a, b) => a.id.localeCompare(b.id));
+  // Sort features deterministically by ID, then deduplicate near-matches
+  const sorted = [...featureMap.values()].sort((a, b) => a.id.localeCompare(b.id));
+  const features = deduplicateFeatures(sorted);
 
   const atlas = {
     version: '1.0.0',
@@ -78,7 +79,9 @@ export async function runAtlas(config, flags) {
     features,
     stats: {
       files_scanned: docFiles.length,
-      features_extracted: features.length,
+      features_extracted: featureMap.size,
+      features_deduplicated: features.length,
+      duplicates_merged: featureMap.size - features.length,
       tag_count: tagCount,
     },
   };
@@ -89,6 +92,44 @@ export async function runAtlas(config, flags) {
   writeFileSync(outPath, JSON.stringify(atlas, null, 2) + '\n', 'utf-8');
 
   console.log(`Atlas: ${features.length} features from ${docFiles.length} file(s) → ${relative(cwd, outPath)}`);
+}
+
+/**
+ * Deduplicate near-matching features by merging them.
+ * Shorter name wins as primary; longer name becomes a synonym.
+ * @param {import('./types.mjs').Feature[]} features - Sorted feature array
+ * @param {number} [threshold=0.7] - matchScore threshold for merging
+ * @returns {import('./types.mjs').Feature[]}
+ */
+export function deduplicateFeatures(features, threshold = 0.7) {
+  const merged = [];
+  const consumed = new Set();
+
+  for (let i = 0; i < features.length; i++) {
+    if (consumed.has(i)) continue;
+    let primary = { ...features[i], synonyms: [...features[i].synonyms] };
+
+    for (let j = i + 1; j < features.length; j++) {
+      if (consumed.has(j)) continue;
+      const score = matchScore(primary.name, features[j].name);
+      if (score >= threshold) {
+        // Keep shorter name as primary
+        if (features[j].name.length < primary.name.length) {
+          primary.synonyms.push(primary.name);
+          primary.name = features[j].name;
+          primary.synonyms.push(primary.id);
+          primary.id = features[j].id;
+        } else {
+          primary.synonyms.push(features[j].name);
+        }
+        // Merge sources
+        primary.sources = [...primary.sources, ...features[j].sources];
+        consumed.add(j);
+      }
+    }
+    merged.push(primary);
+  }
+  return merged;
 }
 
 /**

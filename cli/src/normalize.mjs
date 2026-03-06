@@ -72,6 +72,36 @@ export function matchScore(a, b) {
  * @param {number} [threshold=0.4]
  * @returns {{ match: string, score: number } | null}
  */
+/**
+ * Strip a base path prefix from a route.
+ * @param {string} route
+ * @param {string} basePath
+ * @returns {string}
+ */
+export function stripBasePath(route, basePath) {
+  if (!basePath || basePath === '/') return route;
+  const norm = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
+  if (route.startsWith(norm)) {
+    const stripped = route.slice(norm.length);
+    return stripped === '' ? '/' : stripped.startsWith('/') ? stripped : '/' + stripped;
+  }
+  return route;
+}
+
+/**
+ * Detect the base path from a baseUrl.
+ * @param {string} baseUrl
+ * @returns {string}
+ */
+export function detectBasePath(baseUrl) {
+  try {
+    const u = new URL(baseUrl);
+    return u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
 export function bestMatch(query, candidates, threshold = 0.4) {
   let best = null;
   let bestScore = 0;

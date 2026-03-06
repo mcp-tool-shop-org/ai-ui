@@ -6,6 +6,7 @@ import { loadMemory, applyExceptions } from './memory.mjs';
 import { compareBaseline, applyBaselineRules, computeMemoryHash, computeConfigHash } from './baseline.mjs';
 import { loadMustSurface, checkMustSurface } from './must-surface.mjs';
 import { buildActionSummary } from './runtime-coverage.mjs';
+import { loadReplayPack, extractArtifactsFromPack } from './replay-pack.mjs';
 
 // =============================================================================
 // Metric extraction — pure function
@@ -531,9 +532,15 @@ function findThreshold(verdict, rule) {
 /**
  * Run the Verify command.
  * @param {import('./types.mjs').AiUiConfig} config
- * @param {{ verbose?: boolean, runPipeline?: boolean, strict?: boolean, json?: boolean, noMemory?: boolean, memoryStrict?: boolean, noMustSurface?: boolean }} flags
+ * @param {{ verbose?: boolean, runPipeline?: boolean, strict?: boolean, json?: boolean, noMemory?: boolean, memoryStrict?: boolean, noMustSurface?: boolean, replay?: string, gate?: string, minCoverage?: number }} flags
  */
 export async function runVerify(config, flags) {
+  // --replay: load from replay pack instead of live artifacts
+  if (flags.replay) {
+    await runVerifyFromPack(config, flags);
+    return;
+  }
+
   const cwd = process.cwd();
 
   // --run-pipeline: execute the full pipeline first
@@ -784,6 +791,138 @@ export async function runVerify(config, flags) {
       }
       if (actionSummaryResult) {
         console.log(`  Action summary: ${actionSummaryResult.total_actions} actions, ${actionSummaryResult.coverage_percent}% coverage`);
+      }
+    }
+  }
+
+  process.exitCode = verdict.exit_code;
+}
+
+// =============================================================================
+// Replay pack handler
+// =============================================================================
+
+/**
+ * Run verify from a replay pack — re-derive gate verdict from bundled artifacts.
+ * @param {import('./types.mjs').AiUiConfig} config
+ * @param {{ verbose?: boolean, json?: boolean, gate?: string, minCoverage?: number, replay: string }} flags
+ */
+export async function runVerifyFromPack(config, flags) {
+  const cwd = process.cwd();
+  const packPath = resolve(cwd, flags.replay);
+
+  let pack;
+  try {
+    pack = loadReplayPack(packPath);
+  } catch (e) {
+    if (flags.json) {
+      const errorVerdict = {
+        version: '1.0.0', generated_at: new Date().toISOString(),
+        pass: false, exit_code: 2,
+        metrics: null, blockers: [{ rule: 'replay_load_error', message: e.message }],
+        warnings: [], artifact_versions: {},
+      };
+      console.log(JSON.stringify(errorVerdict, null, 2));
+    } else {
+      console.error(`Verify (replay): ${e.message}`);
+    }
+    process.exitCode = 2;
+    return;
+  }
+
+  const extracted = extractArtifactsFromPack(pack);
+
+  if (!extracted.coverageReport || !extracted.actionReport) {
+    const msg = 'Replay pack missing required coverage artifacts (runtimeCoverage, runtimeCoverageActions)';
+    if (flags.json) {
+      const errorVerdict = {
+        version: '1.0.0', generated_at: new Date().toISOString(),
+        pass: false, exit_code: 2,
+        metrics: null, blockers: [{ rule: 'replay_missing_artifacts', message: msg }],
+        warnings: [], artifact_versions: {},
+      };
+      console.log(JSON.stringify(errorVerdict, null, 2));
+    } else {
+      console.error(`Verify (replay): ${msg}`);
+    }
+    process.exitCode = 2;
+    return;
+  }
+
+  // Determine gate mode: flag overrides pack manifest
+  const gateMode = /** @type {import('./types.mjs').GateMode} */ (
+    flags.gate || pack.manifest.summary.gate_mode || 'none'
+  );
+
+  // Build gate config from pack's config snapshot, with flag overrides
+  const gateConfig = { ...pack.manifest.config_snapshot.coverage_gate };
+  if (flags.minCoverage !== undefined) {
+    gateConfig.minCoveragePercent = flags.minCoverage;
+  }
+
+  // Apply coverage gate
+  const gateResult = applyCoverageGate(
+    gateMode,
+    extracted.actionReport,
+    extracted.coverageReport,
+    gateConfig,
+    extracted.baselineCoverage,
+  );
+
+  // Build action summary
+  const actionSummary = buildActionSummary(
+    extracted.actionReport.actions,
+    extracted.coverageReport.surprises_v2 || [],
+    extracted.coverageReport.summary.coverage_percent,
+  );
+
+  // Assemble verdict
+  const pass = gateResult.blockers.length === 0;
+  const verdict = {
+    version: '1.0.0',
+    generated_at: new Date().toISOString(),
+    pass,
+    exit_code: pass ? 0 : 1,
+    source: 'replay',
+    replay_pack: relative(cwd, packPath),
+    coverage_gate: gateResult,
+    action_summary: actionSummary,
+    artifact_versions: {
+      runtimeCoverage: extracted.coverageReport.version || 'unknown',
+      runtimeCoverageActions: extracted.actionReport.version || 'unknown',
+    },
+  };
+
+  // Output
+  if (flags.json) {
+    console.log(JSON.stringify(verdict, null, 2));
+  } else {
+    const icon = verdict.pass ? 'PASS' : 'FAIL';
+    console.log(`Verify (replay): ${icon}`);
+    console.log(`  Pack: ${relative(cwd, packPath)}`);
+    console.log(`  Gate: ${gateMode} — ${verdict.pass ? 'PASS' : 'FAIL'}`);
+    console.log(`  Coverage: ${actionSummary.coverage_percent}% | Actions: ${actionSummary.total_actions}`);
+
+    if (gateResult.blockers.length > 0) {
+      console.log('  Blockers:');
+      for (const b of gateResult.blockers) {
+        console.log(`    - [${b.rule}] ${b.message}`);
+      }
+    }
+    if (gateResult.warnings.length > 0) {
+      console.log('  Warnings:');
+      for (const w of gateResult.warnings) {
+        console.log(`    - [${w.rule}] ${w.message}`);
+      }
+    }
+    if (gateResult.delta) {
+      const d = gateResult.delta;
+      console.log(`  Delta: +${d.new_action_ids.length} new, -${d.resolved_action_ids.length} resolved, coverage ${d.coverage_change >= 0 ? '+' : ''}${d.coverage_change}%`);
+    }
+    if (flags.verbose) {
+      console.log(`  Action types: ${Object.entries(actionSummary.by_action_type).map(([k, v]) => `${k}=${v}`).join(', ')}`);
+      if (Object.keys(actionSummary.by_surprise_category).length > 0) {
+        console.log(`  Surprises: ${Object.entries(actionSummary.by_surprise_category).map(([k, v]) => `${k}=${v}`).join(', ')}`);
       }
     }
   }
