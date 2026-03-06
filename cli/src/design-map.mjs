@@ -760,11 +760,62 @@ export function inferTaskFlows(graph, coverage, basePath = '', goalRoutes = [], 
     }
   }
 
-  // Sort by total_depth descending, then name
-  flows.sort((a, b) => b.total_depth - a.total_depth || a.task_name.localeCompare(b.task_name));
+  // --- Action flows: non-navigating triggers with goal hits ---
+  // Triggers that don't navigate (dialogs, toggles, saves) won't appear in
+  // navigation flows. Evaluate goal rules for them and create single-step
+  // "action" flows so goals are visible in the design map.
+  if (goalRules.length > 0) {
+    const runtimePresent = hasRuntimeEvidence(graph);
+    const navigatingTriggers = new Set(triggerNavTo.keys());
+    const flowTriggerLabels = new Set(flows.flatMap(f => f.steps.map(s => `${s.route}|${s.trigger_label}`)));
 
-  // Cap at 15
-  return flows.slice(0, 15);
+    for (const node of graph.nodes) {
+      if (node.type !== 'trigger') continue;
+      if (navigatingTriggers.has(node.id)) continue;
+
+      const trigKey = node.id; // "trigger:<route>|<label>"
+      const routeLabel = node.route || node.id.replace(/^trigger:/, '').split('|')[0];
+      const label = node.label || node.id.split('|').pop();
+
+      // Skip if this trigger already appears in a flow step
+      if (flowTriggerLabels.has(`${routeLabel}|${label}`)) continue;
+
+      const hits = evaluateGoalRules(trigKey, graph, goalRules, runtimePresent);
+      if (hits.length === 0) continue;
+
+      const effects = getEffectKinds(trigKey, graph);
+      /** @type {import('./types.mjs').TaskFlowStep} */
+      const step = {
+        trigger_label: label,
+        route: routeLabel,
+        step_type: 'action',
+        effects,
+        is_destructive: DESTRUCTIVE_RE.test(label),
+        goals_hit: hits,
+      };
+
+      /** @type {import('./types.mjs').TaskFlow} */
+      const flow = {
+        task_name: `Action: ${label}`,
+        entry_trigger: label,
+        total_depth: 1,
+        steps: [step],
+        goal_reached: true,
+        goals_reached: deduplicateGoalHits(hits),
+        goal_score_total: hits.reduce((sum, h) => sum + h.score, 0),
+      };
+
+      flows.push(flow);
+    }
+  }
+
+  // Split: action flows with goals go first, then nav flows sorted by depth
+  const actionWithGoals = flows.filter(f => f.goals_reached?.length > 0);
+  const navFlows = flows.filter(f => !(f.goals_reached?.length > 0));
+  navFlows.sort((a, b) => b.total_depth - a.total_depth || a.task_name.localeCompare(b.task_name));
+
+  // Cap nav flows at 15, then prepend action flows (uncapped)
+  return [...actionWithGoals, ...navFlows.slice(0, 15)];
 }
 
 /**
@@ -865,12 +916,13 @@ function matchStorageRule(config, observed, all, runtimePresent, requiresObserve
   const storageNodes = candidates.filter(n => n.meta?.kind === 'storageWrite');
 
   for (const n of storageNodes) {
-    const keyMatch = !config.keyRegex || (n.meta?.key && new RegExp(config.keyRegex, 'i').test(n.meta.key));
+    const resolvedKey = resolveStorageKey(n);
+    const keyMatch = !config.keyRegex || (resolvedKey && new RegExp(config.keyRegex, 'i').test(resolvedKey));
     const valMatch = !config.valueRegex || (n.meta?.value && new RegExp(config.valueRegex, 'i').test(n.meta.value));
     if (keyMatch && valMatch) {
       return {
         matched: true,
-        summary: `storageWrite: ${n.meta?.key || '(key)'}`,
+        summary: `storageWrite: ${resolvedKey || '(key)'}`,
         confidence: n.meta?.observed ? 'observed' : 'unknown',
       };
     }
@@ -880,15 +932,36 @@ function matchStorageRule(config, observed, all, runtimePresent, requiresObserve
   if (!runtimePresent && requiresObserved) {
     const unobserved = all.filter(n => n.meta?.kind === 'storageWrite' && !n.meta?.observed);
     for (const n of unobserved) {
-      const keyMatch = !config.keyRegex || (n.meta?.key && new RegExp(config.keyRegex, 'i').test(n.meta.key));
+      const resolvedKey = resolveStorageKey(n);
+      const keyMatch = !config.keyRegex || (resolvedKey && new RegExp(config.keyRegex, 'i').test(resolvedKey));
       const valMatch = !config.valueRegex || (n.meta?.value && new RegExp(config.valueRegex, 'i').test(n.meta.value));
       if (keyMatch && valMatch) {
-        return { matched: true, summary: `storageWrite: ${n.meta?.key || '(key)'} (unverified)`, confidence: 'unknown' };
+        return { matched: true, summary: `storageWrite: ${resolvedKey || '(key)'} (unverified)`, confidence: 'unknown' };
       }
     }
   }
 
   return { matched: false };
+}
+
+/**
+ * Resolve the storage key from a graph node.
+ * Checks: meta.key → evidence[].key (strips prefix) → node ID (strips prefix).
+ * @param {import('./types.mjs').GraphNode} n
+ * @returns {string|undefined}
+ */
+function resolveStorageKey(n) {
+  if (n.meta?.key) return n.meta.key;
+  // evidence[].key format: "storageWrite:local:actualKey"
+  const evKey = n.meta?.evidence?.[0]?.key;
+  if (evKey) {
+    const stripped = evKey.replace(/^storageWrite:(local|session):/, '');
+    if (stripped !== evKey) return stripped;
+    return evKey;
+  }
+  // node ID format: "effect:stateWrite:actualKey"
+  if (n.id?.startsWith('effect:stateWrite:')) return n.id.slice('effect:stateWrite:'.length);
+  return undefined;
 }
 
 /**
@@ -940,7 +1013,7 @@ function matchFetchRule(config, observed, all, runtimePresent, requiresObserved)
  * @param {boolean} requiresObserved
  * @returns {MatchResult}
  */
-function matchDomRule(config, observed, all, runtimePresent, requiresObserved) {
+function matchDomRule(config, observed, all, runtimePresent, requiresObserved, triggerLabel = '') {
   const candidates = requiresObserved ? observed : all;
   const domNodes = candidates.filter(n => n.meta?.kind === 'domEffect');
 
@@ -949,10 +1022,13 @@ function matchDomRule(config, observed, all, runtimePresent, requiresObserved) {
     if (config.goalId && n.meta?.goalId && n.meta.goalId === config.goalId) {
       return { matched: true, summary: `goalId: ${n.meta.goalId}`, confidence: n.meta?.observed ? 'observed' : 'unknown' };
     }
-    // textRegex match against detail
-    if (config.textRegex && n.meta?.detail) {
-      if (new RegExp(config.textRegex, 'i').test(n.meta.detail)) {
-        return { matched: true, summary: `domEffect: ${n.meta.detail}`, confidence: n.meta?.observed ? 'observed' : 'unknown' };
+    // textRegex match against detail, node label, trigger label, or meta.text
+    if (config.textRegex) {
+      const textTargets = [n.meta?.detail, n.label, n.meta?.text, triggerLabel].filter(Boolean);
+      for (const target of textTargets) {
+        if (new RegExp(config.textRegex, 'i').test(target)) {
+          return { matched: true, summary: `domEffect: ${target}`, confidence: n.meta?.observed ? 'observed' : 'unknown' };
+        }
       }
     }
     // selector match
@@ -969,8 +1045,13 @@ function matchDomRule(config, observed, all, runtimePresent, requiresObserved) {
       if (config.goalId && n.meta?.goalId && n.meta.goalId === config.goalId) {
         return { matched: true, summary: `goalId: ${n.meta.goalId} (unverified)`, confidence: 'unknown' };
       }
-      if (config.textRegex && n.meta?.detail && new RegExp(config.textRegex, 'i').test(n.meta.detail)) {
-        return { matched: true, summary: `domEffect: ${n.meta.detail} (unverified)`, confidence: 'unknown' };
+      if (config.textRegex) {
+        const textTargets = [n.meta?.detail, n.label, n.meta?.text].filter(Boolean);
+        for (const target of textTargets) {
+          if (new RegExp(config.textRegex, 'i').test(target)) {
+            return { matched: true, summary: `domEffect: ${target} (unverified)`, confidence: 'unknown' };
+          }
+        }
       }
     }
   }
@@ -992,6 +1073,11 @@ export function evaluateGoalRules(triggerId, graph, goalRules, runtimePresent) {
   const observed = getObservedEffectDetails(triggerId, graph);
   const all = getAllEffectNodes(triggerId, graph);
 
+  // Resolve trigger label for domEffect textRegex matching
+  const nodeMap = new Map(graph.nodes.map(n => [n.id, n]));
+  const triggerNode = nodeMap.get(triggerId);
+  const triggerLabel = triggerNode?.label || '';
+
   /** @type {import('./types.mjs').GoalHit[]} */
   const hits = [];
 
@@ -1004,7 +1090,7 @@ export function evaluateGoalRules(triggerId, graph, goalRules, runtimePresent) {
       const subResults = [];
       if (rule.storage) subResults.push(matchStorageRule(rule.storage, observed, all, runtimePresent, requiresObserved));
       if (rule.fetch) subResults.push(matchFetchRule(rule.fetch, observed, all, runtimePresent, requiresObserved));
-      if (rule.dom) subResults.push(matchDomRule(rule.dom, observed, all, runtimePresent, requiresObserved));
+      if (rule.dom) subResults.push(matchDomRule(rule.dom, observed, all, runtimePresent, requiresObserved, triggerLabel));
 
       if (subResults.length === 0) continue;
       // ALL sub-predicates must match (AND logic)
@@ -1026,7 +1112,7 @@ export function evaluateGoalRules(triggerId, graph, goalRules, runtimePresent) {
       } else if (rule.kind === 'fetch' && rule.fetch) {
         result = matchFetchRule(rule.fetch, observed, all, runtimePresent, requiresObserved);
       } else if (rule.kind === 'domEffect' && rule.dom) {
-        result = matchDomRule(rule.dom, observed, all, runtimePresent, requiresObserved);
+        result = matchDomRule(rule.dom, observed, all, runtimePresent, requiresObserved, triggerLabel);
       }
 
       if (result.matched) {
