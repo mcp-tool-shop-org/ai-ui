@@ -1,6 +1,6 @@
 ---
 title: Commands
-description: Full CLI reference for all 16 AI-UI commands.
+description: Full CLI reference for all AI-UI commands.
 sidebar:
   order: 3
 ---
@@ -188,6 +188,94 @@ ai-ui replay-diff
 ```
 
 Shows what changed between two snapshots — coverage deltas, new/removed triggers, goal score changes.
+
+## AI commands (local Ollama)
+
+Three commands use local [Ollama](https://ollama.com) models to extend the pipeline with semantic matching, visual analysis, and code generation. All processing runs locally — no data leaves your machine.
+
+**Prerequisites:** Ollama must be running (`ollama serve`). Pull the required models before first use:
+
+```bash
+ollama pull qwen2.5:14b          # for ai-suggest
+ollama pull llava:13b             # for ai-eyes
+ollama pull qwen2.5-coder:7b     # for ai-hands
+```
+
+### ai-suggest
+
+Semantic matching between documented features and UI surfaces using a general-purpose LLM (Brain).
+
+```bash
+ai-ui ai-suggest
+ai-ui ai-suggest --model qwen2.5:14b
+ai-ui ai-suggest --min-confidence 0.7
+ai-ui ai-suggest --eyes ai-ui-output/eyes.json
+```
+
+**Input:** `atlas.json` + `probe.jsonl` + `diff.json` (+ optional Eyes annotations)
+**Output:** `ai-ui-output/ai-suggest.json`, `ai-suggest.patch.json`, `ai-suggest.md` — alias patches that tell the diff engine which features map to which triggers.
+
+**Flags:**
+- `--model <name>` — Ollama model (default: configured in `ai-ui.config.json`)
+- `--min-confidence <n>` — minimum match confidence 0.0–1.0 (default: 0.55)
+- `--eyes <path>` — path to Eyes annotations for visual enrichment
+
+### ai-eyes
+
+Visual surface enrichment using a vision model (Eyes). Identifies icon-only buttons, text-poor controls, and visually ambiguous surfaces.
+
+```bash
+ai-ui ai-eyes
+ai-ui ai-eyes --model llava:7b
+```
+
+**Input:** `probe.jsonl` + screenshots from `probe.baseUrl`
+**Output:** `ai-ui-output/eyes.json` — annotated surfaces with `icon_guess`, `visible_text`, `nearby_context`, and confidence scores.
+
+Each surface gets a visual annotation describing what a human would see. This context feeds into ai-suggest (better alias matching) and ai-hands (precise edit targeting).
+
+**Flags:**
+- `--model <name>` — Vision model (default: `llava:13b`)
+
+### ai-hands
+
+PR-ready patch generator using a code model (Hands). Reads the full design-map pipeline output, scans the target repo, and generates find/replace edits to close surfacing gaps.
+
+```bash
+ai-ui ai-hands
+ai-ui ai-hands --tasks surface-settings,goal-hooks
+ai-ui ai-hands --repo /path/to/project
+ai-ui ai-hands --min-rank 0.50
+ai-ui ai-hands --dry-run
+```
+
+**Input:** design-map artifacts + repo source files (+ optional Eyes annotations)
+**Output:**
+- `hands.plan.md` — ranked edit groups (High → Medium → Low confidence) with per-edit reasons
+- `hands.patch.diff` — unified diff with hunks ordered by trustworthiness
+- `hands.files.json` — manifest with `rank_score`, `rank_bucket`, `rank_reasons` per file
+- `hands.verify.md` — verification checklist
+
+**Task types:**
+
+| Task | What it does |
+|------|-------------|
+| `add-aiui-hooks` | Add `data-aiui-safe` to non-destructive interactive elements |
+| `surface-settings` | Improve discoverability for documented-but-buried features |
+| `goal-hooks` | Add `data-aiui-goal` for task completion detection |
+| `copy-fix` | Align UI labels with documentation terminology |
+
+**Flags:**
+- `--model <name>` — Code model (default: `qwen2.5-coder:7b`)
+- `--tasks <list>` — Comma-separated task types (default: all four)
+- `--repo <path>` — Target repo root (default: CWD)
+- `--min-rank <n>` — Minimum rank score 0.0–1.0 to include (suppresses low-confidence hunks)
+- `--dry-run` — Skip Ollama queries, generate empty plans
+- `--verbose` — Show per-edit rank breakdowns
+
+**Edit ranking:** Every edit is scored across five deterministic signals (validation strength, anchor quality, edit locality, provenance alignment, safety risk) and sorted into High (≥0.75) / Medium (0.50–0.74) / Low (<0.50) buckets. Validated edits always appear before proposal-only edits. High-risk edits (touching auth/routing, deleting code) show a ⚠️ indicator even within High confidence.
+
+**Safety:** Edits are never applied automatically. All outputs are proposals for human review. Apply with `git apply hands.patch.diff` after reviewing `hands.plan.md`.
 
 ## Utility commands
 

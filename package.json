@@ -1,12 +1,18 @@
 {
   "name": "ai-ui",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Automated design diagnostics for SPAs — crawl, diff, verify UI against docs",
-  "private": true,
   "type": "module",
   "bin": {
     "ai-ui": "./cli/bin/ai-ui.mjs"
   },
+  "files": [
+    "cli/bin/",
+    "cli/src/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",

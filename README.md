@@ -63,6 +63,9 @@ Output lands in `ai-ui-output/`. The diff report tells you what's matched, what'
 | `runtime-coverage` | Per-trigger coverage matrix (probed / surfaced / observed) |
 | `replay-pack` | Bundle all artifacts into a reproducible replay pack |
 | `replay-diff` | Compare two replay packs — show what changed and why |
+| `ai-suggest` | Match doc features to UI surfaces using Ollama (Brain) |
+| `ai-eyes` | Visually identify icon-only and text-poor surfaces using LLaVA (Eyes) |
+| `ai-hands` | Generate PR-ready patches for surfacing gaps using qwen2.5-coder (Hands) |
 | `stage0` | Run atlas + probe + diff in sequence |
 | `init-memory` | Create empty memory files for decision tracking |
 
@@ -125,14 +128,64 @@ The `design-map` command produces four artifacts:
 The full pipeline sequence:
 
 ```
-atlas → probe → diff → graph → design-map
-                 ↓
-          runtime-effects → graph --with-runtime → design-map (with goals)
-                                                        ↓
-                                                   replay-pack → replay-diff
+atlas → probe → diff → graph → design-map → ai-suggest → ai-eyes → ai-hands
+                 ↓                                                      ↓
+          runtime-effects → graph --with-runtime                  hands.plan.md
+                                    ↓                             hands.patch.diff
+                              design-map (with goals)             hands.files.json
+                                    ↓                             hands.verify.md
+                              replay-pack → replay-diff
 ```
 
 Each stage reads the previous stage's output from `ai-ui-output/`. The pipeline is deterministic — same inputs produce same outputs.
+
+## AI commands (local Ollama)
+
+Three commands use local Ollama models to go beyond deterministic matching. They require [Ollama](https://ollama.com) running locally — no data leaves your machine.
+
+### ai-suggest (Brain)
+
+Semantic matching between documented features and UI surfaces using a general-purpose LLM.
+
+```bash
+ai-ui ai-suggest                        # default model
+ai-ui ai-suggest --model qwen2.5:14b    # specify model
+ai-ui ai-suggest --eyes ai-ui-output/eyes.json  # enrich with Eyes data
+```
+
+Outputs alias patches that tell the diff engine which features map to which triggers — closing gaps that fuzzy string matching misses.
+
+### ai-eyes (Eyes)
+
+Visual surface enrichment using a vision model (LLaVA). Identifies icon-only buttons, text-poor controls, and visually ambiguous surfaces.
+
+```bash
+ai-ui ai-eyes                           # default: llava:13b
+ai-ui ai-eyes --model llava:7b          # lighter model
+```
+
+Annotates surfaces with `icon_guess`, `visible_text`, and `nearby_context` — context that downstream commands (ai-suggest, ai-hands) use for precise targeting.
+
+### ai-hands (Hands)
+
+PR-ready patch generator using a code model (qwen2.5-coder). Reads the full design-map pipeline output and generates find/replace edits to close surfacing gaps.
+
+```bash
+ai-ui ai-hands                          # all tasks, default model
+ai-ui ai-hands --tasks surface-settings,goal-hooks  # specific tasks
+ai-ui ai-hands --repo /path/to/project  # target a different repo
+ai-ui ai-hands --min-rank 0.50          # only high/medium confidence edits
+```
+
+**Task types:**
+- `add-aiui-hooks` — add `data-aiui-safe` attributes to non-destructive interactive elements
+- `surface-settings` — improve discoverability for documented-but-buried features
+- `goal-hooks` — add `data-aiui-goal` attributes for task completion detection
+- `copy-fix` — align UI labels with documentation terminology
+
+**Outputs:** `hands.plan.md` (ranked edit groups), `hands.patch.diff` (hunks in trust order), `hands.files.json` (manifest with rank metadata), `hands.verify.md` (verification checklist).
+
+Every edit is ranked by trustworthiness (validation strength, anchor quality, locality, provenance, safety) and sorted into High/Medium/Low confidence buckets. Edits are never applied automatically — the output is always a proposal for human review.
 
 ## CI integration
 
@@ -150,8 +203,8 @@ Use `--json` for machine-readable output. Use `baseline --write` to lock in thre
 ## Threat model
 
 AI-UI runs locally against your dev server. It does not:
-- Send data to external services
-- Modify your source code or configuration
+- Send data to external services (AI commands use local Ollama only)
+- Modify your source code or configuration (ai-hands outputs proposals, never applies them)
 - Access anything outside the configured `baseUrl` and doc globs
 - Require network access (all analysis is local)
 
@@ -166,7 +219,7 @@ The `runtime-effects` command clicks real buttons in a Playwright browser. It re
 npm test
 ```
 
-772 tests using Node.js native test runner. No external test framework.
+877 tests using Node.js native test runner. No external test framework.
 
 ## License
 

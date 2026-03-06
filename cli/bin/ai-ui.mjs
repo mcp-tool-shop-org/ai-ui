@@ -2,7 +2,7 @@
 // @ts-check
 import { loadConfig, fail } from '../src/config.mjs';
 
-const VERSION = '1.0.1';
+const VERSION = '1.1.0';
 
 const HELP = `
 ai-ui — Docs↔UI Diff + Trigger Graph + Surfacing Composer + Verify + Memory

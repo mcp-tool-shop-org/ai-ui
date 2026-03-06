@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2026-03-06
+
+### Added
+- **ai-suggest** — semantic feature→trigger matching via local Ollama (Brain role)
+- **ai-eyes** — visual surface enrichment via LLaVA vision model (Eyes role)
+- **ai-hands** — PR-ready patch generation via qwen2.5-coder (Hands role)
+- Four task types for ai-hands: `add-aiui-hooks`, `surface-settings`, `goal-hooks`, `copy-fix`
+- Deterministic edit ranking — five-signal trust scoring (validation, anchor, locality, provenance, safety)
+- Ranked output: High (≥0.75) / Medium (0.50–0.74) / Low (<0.50) confidence buckets
+- Stable sort invariant: validated edits always appear before proposal-only edits
+- ⚠️ risk indicators visible even within High confidence bucket
+- `--min-rank <n>` flag to suppress low-confidence edits
+- `--model`, `--min-confidence`, `--eyes`, `--repo`, `--tasks` flags for AI commands
+- Eyes-enriched context for downstream ai-suggest and ai-hands
+
+### Changed
+- Pipeline diagram now includes AI commands: `ai-suggest → ai-eyes → ai-hands`
+- Test count: 772 → 877
+
 ## [1.0.1] — 2026-03-06
 
 ### Added
