@@ -1,6 +1,6 @@
 {
   "name": "@mcptoolshop/ai-ui",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Automated design diagnostics for SPAs — crawl, diff, verify UI against docs",
   "type": "module",
   "bin": {
